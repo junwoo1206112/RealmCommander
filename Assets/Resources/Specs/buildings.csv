@@ -1,0 +1,7 @@
+ID,Name,Description,MaxHealth,BuildTime,GoldCost,ManaCost,ProductionCapacity
+building_base,Base,본건물,1000,0,0,0,5
+building_barracks,Barracks,보병 생산 건물,500,5,200,0,3
+building_ranged_barracks,Ranged Barracks,원거리 유닛 생산,450,6,250,0,3
+building_magic_tower,Magic Tower,마법 유닛 생산,400,7,300,50,2
+building_resource_generator,Resource Generator,자원 생산 건물,300,4,150,0,0
+building_defense_tower,Defense Tower,방어 타워,600,5,200,0,0

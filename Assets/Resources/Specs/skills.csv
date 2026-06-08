@@ -1,0 +1,6 @@
+ID,Name,Description,Damage,Cooldown,ManaCost,Range,EffectType
+skill_fireball,Fireball,화염구 스킬,50,5,20,8,AoE
+skill_heal,Heal,치유 스킬,0,8,15,6,Single
+skill_shield,Shield,보호막 스킬,0,10,25,0,Buff
+skill_lightning,Lightning,번개 스킬,40,3,15,7,Single
+skill_ice_storm,Ice Storm,폭풍 스킬,60,12,40,10,AoE

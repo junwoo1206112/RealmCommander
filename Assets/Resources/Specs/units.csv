@@ -1,0 +1,5 @@
+ID,Name,Description,MaxHealth,AttackDamage,AttackSpeed,MoveSpeed,AttackRange,GoldCost,ManaCost
+unit_soldier,Soldier,기본 보병 유닛,100,10,1.5,5,2,50,0
+unit_archer,Archer,원거리 공격 유닛,80,15,2,4,8,75,0
+unit_mage,Mage,마법 공격 유닛,60,25,3,3,6,100,20
+unit_tank,Tank,방어력 높은 유닛,200,5,2,3,2,80,0
