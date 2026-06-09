@@ -58,13 +58,13 @@ namespace RealmCommander.RPG
         [SerializeField] private Renderer heroRenderer;
         [SerializeField] private Color heroColor = Color.yellow;
 
-        [SyncVar]
+        [SyncVar(hook = nameof(OnSyncHealthChanged))]
         private float syncHealth;
-        [SyncVar]
+        [SyncVar(hook = nameof(OnSyncManaChanged))]
         private float syncMana;
-        [SyncVar]
+        [SyncVar(hook = nameof(OnSyncLevelChanged))]
         private int syncLevel = 1;
-        [SyncVar]
+        [SyncVar(hook = nameof(OnSyncExpChanged))]
         private float syncExp;
 
         private float lastAttackTime;
@@ -81,6 +81,8 @@ namespace RealmCommander.RPG
 
         private void Awake()
         {
+            heroData ??= new HeroData { heroName = gameObject.name };
+
             if (selectionIndicator != null)
             {
                 selectionIndicator.SetActive(false);
@@ -256,6 +258,10 @@ namespace RealmCommander.RPG
 
             if (target != null)
             {
+                var targetUnit = target.GetComponent<RTS.Unit>();
+                if (targetUnit == null || !targetUnit.IsAlive) return;
+                if (Vector3.Distance(transform.position, target.transform.position) > skill.range) return;
+
                 var combat = Network.CombatManager.Instance;
                 if (combat != null)
                 {
@@ -276,6 +282,8 @@ namespace RealmCommander.RPG
 
         public bool TryCastSkill(int skillIndex, GameObject target)
         {
+            if (!CanCastSkill(skillIndex, target)) return false;
+
             if (isServer)
             {
                 InternalCastSkill(skillIndex, target);
@@ -302,6 +310,10 @@ namespace RealmCommander.RPG
 
             if (target != null)
             {
+                var targetUnit = target.GetComponent<RTS.Unit>();
+                if (targetUnit == null || !targetUnit.IsAlive) return;
+                if (Vector3.Distance(transform.position, target.transform.position) > skill.range) return;
+
                 var combat = Network.CombatManager.Instance;
                 if (combat != null)
                 {
@@ -337,11 +349,52 @@ namespace RealmCommander.RPG
         [Command]
         private void CmdRequestAttack(GameObject target)
         {
+            if (target == null) return;
+
             var combat = Network.CombatManager.Instance;
             if (combat != null)
             {
                 combat.ApplyCombatDamage(gameObject, target, heroData.attackDamage);
             }
+        }
+
+        private bool CanCastSkill(int skillIndex, GameObject target)
+        {
+            if (skillIndex < 0 || skillIndex >= heroData.skills.Count) return false;
+
+            var skill = heroData.skills[skillIndex];
+            if (!skill.IsReady) return false;
+            if (heroData.currentMana < skill.manaCost) return false;
+            if (target == null) return true;
+
+            var targetUnit = target.GetComponent<RTS.Unit>();
+            if (targetUnit == null || !targetUnit.IsAlive) return false;
+
+            return Vector3.Distance(transform.position, target.transform.position) <= skill.range;
+        }
+
+        private void OnSyncHealthChanged(float oldValue, float newValue)
+        {
+            heroData.currentHealth = newValue;
+            OnStatsChanged?.Invoke(heroData);
+        }
+
+        private void OnSyncManaChanged(float oldValue, float newValue)
+        {
+            heroData.currentMana = newValue;
+            OnStatsChanged?.Invoke(heroData);
+        }
+
+        private void OnSyncLevelChanged(int oldValue, int newValue)
+        {
+            heroData.level = newValue;
+            OnStatsChanged?.Invoke(heroData);
+        }
+
+        private void OnSyncExpChanged(float oldValue, float newValue)
+        {
+            heroData.currentExp = newValue;
+            OnStatsChanged?.Invoke(heroData);
         }
 
         public void SetTarget(GameObject target)

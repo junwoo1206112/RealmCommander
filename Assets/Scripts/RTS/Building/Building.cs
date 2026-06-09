@@ -80,7 +80,10 @@ namespace RealmCommander.RTS
                 SelectionManager.Instance?.RegisterSelectableUnit(gameObject);
             }
 
-            CommandManager.Instance.OnAttackCommand += HandleAttackCommand;
+            if (CommandManager.Instance != null)
+            {
+                CommandManager.Instance.OnAttackCommand += HandleAttackCommand;
+            }
         }
 
         private void OnDestroy()
@@ -175,6 +178,7 @@ namespace RealmCommander.RTS
             }
         }
 
+        [Server]
         public void Repair(float amount)
         {
             if (!IsAlive) return;
@@ -182,6 +186,7 @@ namespace RealmCommander.RTS
             currentHealth = Mathf.Min(maxHealth, currentHealth + amount);
         }
 
+        [Server]
         public void StartConstruction()
         {
             isConstructing = true;
@@ -284,7 +289,7 @@ namespace RealmCommander.RTS
         {
             // 네트워크 소유권이 있거나 서버가 비활성일 때 (싱글플레이어)
             if (!isOwned && NetworkServer.active) return;
-            if (!SelectionManager.Instance.IsUnitSelected(gameObject)) return;
+            if (SelectionManager.Instance == null || !SelectionManager.Instance.IsUnitSelected(gameObject)) return;
 
             if (target != null && target == gameObject)
             {

@@ -97,28 +97,31 @@ namespace RealmCommander.Network
         [Server]
         private void CheckWinCondition()
         {
-            int alivePlayers = 0;
-            int winningTeam = -1;
+            bool friendlyAlive = false;
+            bool enemyAlive = false;
 
             var units = FindObjectsByType<RTS.Unit>(FindObjectsSortMode.None);
             foreach (var unit in units)
             {
-                var netIdentity = unit.GetComponent<NetworkIdentity>();
-                if (netIdentity == null) continue;
+                if (unit == null || !unit.IsAlive) continue;
 
-                var netPlayer = netIdentity.GetComponent<NetworkPlayer>();
-                if (netPlayer == null) continue;
-
-                if (unit.IsAlive)
+                if (unit.IsEnemy)
                 {
-                    alivePlayers++;
-                    winningTeam = netPlayer.teamId;
+                    enemyAlive = true;
+                }
+                else
+                {
+                    friendlyAlive = true;
                 }
             }
 
-            if (alivePlayers <= 1 && playerCount >= 2)
+            if (!friendlyAlive && enemyAlive)
             {
-                EndGame(winningTeam);
+                EndGame(1);
+            }
+            else if (friendlyAlive && !enemyAlive)
+            {
+                EndGame(0);
             }
         }
 
@@ -185,9 +188,5 @@ namespace RealmCommander.Network
             GameOver
         }
 
-        private static void ShowGameResult(bool isVictory)
-        {
-            NetworkGameManager.Instance.RpcShowResult(isVictory ? 1 : 0);
-        }
     }
 }

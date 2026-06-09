@@ -84,8 +84,11 @@ namespace RealmCommander.RTS
             if (isOwned || !NetworkServer.active)
             {
                 SelectionManager.Instance?.RegisterSelectableUnit(gameObject);
-                CommandManager.Instance.OnMoveCommand += HandleMoveCommand;
-                CommandManager.Instance.OnAttackCommand += HandleAttackCommand;
+                if (CommandManager.Instance != null)
+                {
+                    CommandManager.Instance.OnMoveCommand += HandleMoveCommand;
+                    CommandManager.Instance.OnAttackCommand += HandleAttackCommand;
+                }
             }
         }
 
@@ -163,6 +166,7 @@ namespace RealmCommander.RTS
             }
         }
 
+        [Server]
         public void Heal(float amount)
         {
             if (!IsAlive) return;
@@ -243,7 +247,7 @@ namespace RealmCommander.RTS
 
         private void HandleMoveCommand(Vector3 position)
         {
-            if (!SelectionManager.Instance.IsUnitSelected(gameObject)) return;
+            if (SelectionManager.Instance == null || !SelectionManager.Instance.IsUnitSelected(gameObject)) return;
 
             ClearTarget();
             if (isServer)
@@ -266,7 +270,7 @@ namespace RealmCommander.RTS
 
         private void HandleAttackCommand(GameObject target)
         {
-            if (!SelectionManager.Instance.IsUnitSelected(gameObject)) return;
+            if (SelectionManager.Instance == null || !SelectionManager.Instance.IsUnitSelected(gameObject)) return;
 
             SetTarget(target);
         }

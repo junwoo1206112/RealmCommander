@@ -21,15 +21,21 @@ namespace RealmCommander.Network
             if (attacker == null || target == null) return false;
 
             var attackerUnit = attacker.GetComponent<RTS.Unit>();
+            var attackerHero = attacker.GetComponent<RPG.Hero>();
             var targetUnit = target.GetComponent<RTS.Unit>();
 
-            if (attackerUnit == null || targetUnit == null) return false;
-            if (!attackerUnit.IsAlive || !targetUnit.IsAlive) return false;
+            if (targetUnit == null) return false;
+            if (attackerUnit == null && attackerHero == null) return false;
+            if (attackerUnit != null && !attackerUnit.IsAlive) return false;
+            if (attackerHero != null && !attackerHero.IsAlive) return false;
+            if (!targetUnit.IsAlive) return false;
 
             float distance = Vector3.Distance(attacker.transform.position, target.transform.position);
-            if (distance > attackerUnit.AttackRange * 1.2f) return false;
+            float attackRange = attackerUnit != null ? attackerUnit.AttackRange : attackerHero.Data.attackRange;
+            if (distance > attackRange * 1.2f) return false;
 
-            if (attackerUnit.IsEnemy == targetUnit.IsEnemy) return false;
+            bool attackerIsEnemy = attackerUnit != null && attackerUnit.IsEnemy;
+            if (attackerIsEnemy == targetUnit.IsEnemy) return false;
 
             return true;
         }
@@ -51,6 +57,8 @@ namespace RealmCommander.Network
         public void ApplySkillDamage(GameObject caster, GameObject target, float damage)
         {
             if (caster == null || target == null) return;
+
+            if (caster == target) return;
 
             var targetUnit = target.GetComponent<RTS.Unit>();
             if (targetUnit != null && targetUnit.IsAlive)

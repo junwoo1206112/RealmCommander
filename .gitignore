@@ -55,3 +55,7 @@ nul
 
 # OpenSpec
 .opencode/
+
+# Third-party package samples not used by this portfolio project
+[Aa]ssets/[Mm]irror/[Ee]xamples/
+[Aa]ssets/[Mm]irror/[Hh]osting/

@@ -94,6 +94,7 @@
 
 ```
 Assets/
+├── Mirror/              # Mirror third-party runtime/editor/transports only
 ├── Scripts/
 │   ├── Core/           # GameManager, SelectionManager, CommandManager
 │   ├── RTS/
@@ -127,6 +128,8 @@ Docs/
 └── Architecture.md     # 아키텍처 문서
 ```
 
+> `Assets/Mirror`는 외부 네트워킹 라이브러리 코드입니다. 포트폴리오 소유 코드를 쉽게 검토할 수 있도록 Mirror 예제/호스팅 샘플은 저장소에서 제외하고, 실제 프로젝트가 사용하는 런타임/에디터/트랜스포트 코드만 유지합니다.
+
 ---
 
 ## 📅 개발 로드맵
@@ -157,7 +160,7 @@ Docs/
 - [x] 메인 메뉴, 로비 UI 스크립트
 
 ### Week 5: 멀티플레이 (Mirror) ✅
-- [x] Mirror 패키지 설치 (manifest.json)
+- [x] Mirror 런타임/에디터/트랜스포트 코드 벤더링 (`Assets/Mirror`)
 - [x] NetworkBehaviour 기반 유닛/건물/영웅 동기화
 - [x] NetworkPlayer, NetworkGameManager
 - [x] CombatManager (서버 권한 검증)
