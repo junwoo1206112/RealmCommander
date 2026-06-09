@@ -1,12 +1,14 @@
 using System;
 using UnityEngine;
 using UnityEngine.AI;
+using Mirror;
 using RealmCommander.Core;
 
 namespace RealmCommander.RTS
 {
     [RequireComponent(typeof(NavMeshAgent))]
-    public class Unit : MonoBehaviour
+    [RequireComponent(typeof(NetworkIdentity))]
+    public class Unit : NetworkBehaviour
     {
         [Header("Unit Stats")]
         [SerializeField] private float maxHealth = 100f;
@@ -25,8 +27,9 @@ namespace RealmCommander.RTS
         [SerializeField] private Color enemyColor = Color.red;
         [SerializeField] private Color selectedColor = Color.green;
 
-        private NavMeshAgent agent;
+        [SyncVar(hook = nameof(OnHealthChanged))]
         private float currentHealth;
+        private NavMeshAgent agent;
         private float lastAttackTime;
         private GameObject currentTarget;
         private bool isSelected;
@@ -34,11 +37,12 @@ namespace RealmCommander.RTS
         public float MaxHealth => maxHealth;
         public float CurrentHealth => currentHealth;
         public float HealthPercent => currentHealth / maxHealth;
+        public float AttackRange => attackRange;
         public bool IsEnemy => isEnemy;
         public bool IsAlive => currentHealth > 0;
         public bool IsSelected => isSelected;
 
-        public event Action<float, float> OnHealthChanged;
+        public event Action<float, float> OnHealthChangedEvent;
         public event Action OnDeath;
         public event Action OnSelected;
         public event Action OnDeselected;
@@ -47,7 +51,18 @@ namespace RealmCommander.RTS
         {
             agent = GetComponent<NavMeshAgent>();
             agent.speed = moveSpeed;
-            currentHealth = maxHealth;
+
+            if (isServer)
+            {
+                currentHealth = maxHealth;
+            }
+
+            // SelectionIndicator가 없으면 자동 생성
+            if (selectionIndicator == null)
+            {
+                var indicator = gameObject.AddComponent<SelectionIndicator>();
+                selectionIndicator = indicator.gameObject;
+            }
 
             if (selectionIndicator != null)
             {
@@ -57,17 +72,29 @@ namespace RealmCommander.RTS
             UpdateTeamColor();
         }
 
+        public override void OnStartServer()
+        {
+            base.OnStartServer();
+            currentHealth = maxHealth;
+        }
+
         private void Start()
         {
-            SelectionManager.Instance?.RegisterSelectableUnit(gameObject);
-
-            CommandManager.Instance.OnMoveCommand += HandleMoveCommand;
-            CommandManager.Instance.OnAttackCommand += HandleAttackCommand;
+            // 네트워크 소유권이 있거나 서버가 비활성일 때 (싱글플레이어)
+            if (isOwned || !NetworkServer.active)
+            {
+                SelectionManager.Instance?.RegisterSelectableUnit(gameObject);
+                CommandManager.Instance.OnMoveCommand += HandleMoveCommand;
+                CommandManager.Instance.OnAttackCommand += HandleAttackCommand;
+            }
         }
 
         private void OnDestroy()
         {
-            SelectionManager.Instance?.UnregisterSelectableUnit(gameObject);
+            if (SelectionManager.Instance != null)
+            {
+                SelectionManager.Instance?.UnregisterSelectableUnit(gameObject);
+            }
 
             if (CommandManager.Instance != null)
             {
@@ -123,12 +150,12 @@ namespace RealmCommander.RTS
             }
         }
 
+        [Server]
         public void TakeDamage(float damage)
         {
             if (!IsAlive) return;
 
             currentHealth = Mathf.Max(0, currentHealth - damage);
-            OnHealthChanged?.Invoke(currentHealth, maxHealth);
 
             if (currentHealth <= 0)
             {
@@ -141,7 +168,11 @@ namespace RealmCommander.RTS
             if (!IsAlive) return;
 
             currentHealth = Mathf.Min(maxHealth, currentHealth + amount);
-            OnHealthChanged?.Invoke(currentHealth, maxHealth);
+        }
+
+        private void OnHealthChanged(float oldValue, float newValue)
+        {
+            OnHealthChangedEvent?.Invoke(newValue, maxHealth);
         }
 
         private void TryAttack()
@@ -152,7 +183,28 @@ namespace RealmCommander.RTS
                 var targetUnit = currentTarget.GetComponent<Unit>();
                 if (targetUnit != null)
                 {
-                    targetUnit.TakeDamage(attackDamage);
+                    if (isServer)
+                    {
+                        targetUnit.TakeDamage(attackDamage);
+                    }
+                    else
+                    {
+                        CmdRequestAttack(currentTarget);
+                    }
+                }
+            }
+        }
+
+        [Command]
+        private void CmdRequestAttack(GameObject target)
+        {
+            var targetUnit = target.GetComponent<Unit>();
+            if (targetUnit != null)
+            {
+                var combat = Network.CombatManager.Instance;
+                if (combat != null)
+                {
+                    combat.ApplyCombatDamage(gameObject, target, attackDamage);
                 }
             }
         }
@@ -163,8 +215,26 @@ namespace RealmCommander.RTS
             agent.enabled = false;
             OnDeath?.Invoke();
 
-            SelectionManager.Instance?.UnregisterSelectableUnit(gameObject);
+            // 네트워크 소유권이 있거나 서버가 비활성일 때 (싱글플레이어)
+            if (isOwned || !NetworkServer.active)
+            {
+                SelectionManager.Instance?.UnregisterSelectableUnit(gameObject);
+            }
 
+            if (unitRenderer != null)
+            {
+                unitRenderer.material.color = Color.gray;
+            }
+
+            if (isServer)
+            {
+                RpcOnDeath();
+            }
+        }
+
+        [ClientRpc]
+        private void RpcOnDeath()
+        {
             if (unitRenderer != null)
             {
                 unitRenderer.material.color = Color.gray;
@@ -176,6 +246,20 @@ namespace RealmCommander.RTS
             if (!SelectionManager.Instance.IsUnitSelected(gameObject)) return;
 
             ClearTarget();
+            if (isServer)
+            {
+                agent.isStopped = false;
+                agent.SetDestination(position);
+            }
+            else
+            {
+                CmdMove(position);
+            }
+        }
+
+        [Command]
+        private void CmdMove(Vector3 position)
+        {
             agent.isStopped = false;
             agent.SetDestination(position);
         }
@@ -212,6 +296,9 @@ namespace RealmCommander.RTS
 
         private void OnMouseDown()
         {
+            // 네트워크 소유권이 있거나 서버가 비활성일 때 (싱글플레이어)
+            if (!isOwned && NetworkServer.active) return;
+
             if (Input.GetMouseButtonUp(0))
             {
                 if (Input.GetKey(KeyCode.LeftShift))

@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using Mirror;
 using RealmCommander.Core;
 
 namespace RealmCommander.RTS
 {
-    public class Building : MonoBehaviour
+    [RequireComponent(typeof(NetworkIdentity))]
+    public class Building : NetworkBehaviour
     {
         [Header("Building Settings")]
         [SerializeField] private string buildingName;
@@ -23,6 +25,7 @@ namespace RealmCommander.RTS
         [SerializeField] private Color buildingColor = Color.gray;
         [SerializeField] private Color selectedColor = Color.cyan;
 
+        [SyncVar(hook = nameof(OnHealthChanged))]
         private float currentHealth;
         private bool isSelected;
         private bool isConstructing;
@@ -41,7 +44,7 @@ namespace RealmCommander.RTS
         public bool IsProducing => currentProduction.Count > 0;
         public float ProductionRange => productionRange;
 
-        public event Action<float, float> OnHealthChanged;
+        public event Action<float, float> OnHealthChangedEvent;
         public event Action OnDeath;
         public event Action OnSelected;
         public event Action OnDeselected;
@@ -50,7 +53,10 @@ namespace RealmCommander.RTS
 
         private void Awake()
         {
-            currentHealth = maxHealth;
+            if (isServer)
+            {
+                currentHealth = maxHealth;
+            }
 
             if (selectionIndicator != null)
             {
@@ -60,15 +66,29 @@ namespace RealmCommander.RTS
             UpdateBuildingColor();
         }
 
+        public override void OnStartServer()
+        {
+            base.OnStartServer();
+            currentHealth = maxHealth;
+        }
+
         private void Start()
         {
-            SelectionManager.Instance?.RegisterSelectableUnit(gameObject);
+            // 네트워크 소유권이 있거나 서버가 비활성일 때 (싱글플레이어)
+            if (isOwned || !NetworkServer.active)
+            {
+                SelectionManager.Instance?.RegisterSelectableUnit(gameObject);
+            }
+
             CommandManager.Instance.OnAttackCommand += HandleAttackCommand;
         }
 
         private void OnDestroy()
         {
-            SelectionManager.Instance?.UnregisterSelectableUnit(gameObject);
+            if (SelectionManager.Instance != null)
+            {
+                SelectionManager.Instance?.UnregisterSelectableUnit(gameObject);
+            }
 
             if (CommandManager.Instance != null)
             {
@@ -114,13 +134,18 @@ namespace RealmCommander.RTS
             {
                 productionTimer = 0;
                 currentProduction.Dequeue();
-                ProduceUnit(currentItem);
+                if (isServer)
+                {
+                    ProduceUnit(currentItem);
+                }
                 OnProductionCompleted?.Invoke(currentItem);
             }
         }
 
         public void SetSelected(bool selected)
         {
+            // 네트워크 소유권이 있거나 서버가 비활성일 때 (싱글플레이어)
+            if (!isOwned && NetworkServer.active) return;
             isSelected = selected;
             if (selectionIndicator != null)
             {
@@ -137,12 +162,12 @@ namespace RealmCommander.RTS
             }
         }
 
+        [Server]
         public void TakeDamage(float damage)
         {
             if (!IsAlive) return;
 
             currentHealth = Mathf.Max(0, currentHealth - damage);
-            OnHealthChanged?.Invoke(currentHealth, maxHealth);
 
             if (currentHealth <= 0)
             {
@@ -155,7 +180,6 @@ namespace RealmCommander.RTS
             if (!IsAlive) return;
 
             currentHealth = Mathf.Min(maxHealth, currentHealth + amount);
-            OnHealthChanged?.Invoke(currentHealth, maxHealth);
         }
 
         public void StartConstruction()
@@ -164,7 +188,39 @@ namespace RealmCommander.RTS
             constructionProgress = 0;
         }
 
+        [Command]
+        public void CmdQueueProduction(UnitProductionData data)
+        {
+            if (data == null) return;
+
+            if (!ResourceManager.Instance.CanAfford(data.goldCost, data.manaCost))
+            {
+                Debug.Log("자원이 부족합니다!");
+                return;
+            }
+
+            if (!ResourceManager.Instance.SpendGold(data.goldCost)) return;
+            if (!ResourceManager.Instance.SpendMana(data.manaCost)) return;
+
+            currentProduction.Enqueue(data);
+            RpcOnProductionStarted(data.unitName);
+
+            Debug.Log($"{data.unitName} 생산 시작!");
+        }
+
         public void QueueProduction(UnitProductionData data)
+        {
+            if (isServer)
+            {
+                InternalQueueProduction(data);
+            }
+            else
+            {
+                CmdQueueProduction(data);
+            }
+        }
+
+        private void InternalQueueProduction(UnitProductionData data)
         {
             if (data == null) return;
 
@@ -183,6 +239,12 @@ namespace RealmCommander.RTS
             Debug.Log($"{data.unitName} 생산 시작!");
         }
 
+        [ClientRpc]
+        private void RpcOnProductionStarted(string unitName)
+        {
+            Debug.Log($"{unitName} 생산 시작!");
+        }
+
         private void ProduceUnit(UnitProductionData data)
         {
             if (data.unitPrefab == null)
@@ -195,7 +257,17 @@ namespace RealmCommander.RTS
             GameObject unit = Instantiate(data.unitPrefab, spawnPosition, Quaternion.identity);
             unit.name = data.unitName;
 
+            NetworkServer.Spawn(unit);
+
+            RpcOnUnitSpawned(spawnPosition);
+
             Debug.Log($"{data.unitName} 생산 완료!");
+        }
+
+        [ClientRpc]
+        private void RpcOnUnitSpawned(Vector3 position)
+        {
+            Debug.Log($"Unit spawned at {position}");
         }
 
         private Vector3 GetSpawnPosition()
@@ -210,6 +282,8 @@ namespace RealmCommander.RTS
 
         private void HandleAttackCommand(GameObject target)
         {
+            // 네트워크 소유권이 있거나 서버가 비활성일 때 (싱글플레이어)
+            if (!isOwned && NetworkServer.active) return;
             if (!SelectionManager.Instance.IsUnitSelected(gameObject)) return;
 
             if (target != null && target == gameObject)
@@ -218,17 +292,41 @@ namespace RealmCommander.RTS
             }
         }
 
+        private void OnHealthChanged(float oldValue, float newValue)
+        {
+            OnHealthChangedEvent?.Invoke(newValue, maxHealth);
+        }
+
         private void Die()
         {
             OnDeath?.Invoke();
-            SelectionManager.Instance?.UnregisterSelectableUnit(gameObject);
+
+            // 네트워크 소유권이 있거나 서버가 비활성일 때 (싱글플레이어)
+            if (isOwned || !NetworkServer.active)
+            {
+                SelectionManager.Instance?.UnregisterSelectableUnit(gameObject);
+            }
 
             if (buildingRenderer != null)
             {
                 buildingRenderer.material.color = Color.black;
             }
 
+            if (isServer)
+            {
+                RpcOnDestroyed();
+            }
+
             Debug.Log($"{buildingName} 파괴됨!");
+        }
+
+        [ClientRpc]
+        private void RpcOnDestroyed()
+        {
+            if (buildingRenderer != null)
+            {
+                buildingRenderer.material.color = Color.black;
+            }
         }
 
         private void UpdateBuildingColor()
@@ -241,6 +339,9 @@ namespace RealmCommander.RTS
 
         private void OnMouseDown()
         {
+            // 네트워크 소유권이 있거나 서버가 비활성일 때 (싱글플레이어)
+            if (!isOwned && NetworkServer.active) return;
+
             if (Input.GetMouseButtonUp(0))
             {
                 if (Input.GetKey(KeyCode.LeftShift))

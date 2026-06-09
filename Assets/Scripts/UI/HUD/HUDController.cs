@@ -32,8 +32,8 @@ namespace RealmCommander.UI
 
             if (ResourceManager.Instance != null)
             {
-                ResourceManager.Instance.OnGoldChanged += UpdateResourceUI;
-                ResourceManager.Instance.OnManaChanged += UpdateResourceUI;
+                ResourceManager.Instance.OnGoldChangedEvent += UpdateResourceUI;
+                ResourceManager.Instance.OnManaChangedEvent += UpdateResourceUI;
             }
 
             UpdateResourceUI(0, 0);
@@ -49,8 +49,8 @@ namespace RealmCommander.UI
 
             if (ResourceManager.Instance != null)
             {
-                ResourceManager.Instance.OnGoldChanged -= UpdateResourceUI;
-                ResourceManager.Instance.OnManaChanged -= UpdateResourceUI;
+                ResourceManager.Instance.OnGoldChangedEvent -= UpdateResourceUI;
+                ResourceManager.Instance.OnManaChangedEvent -= UpdateResourceUI;
             }
         }
 

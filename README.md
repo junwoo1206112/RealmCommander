@@ -9,28 +9,29 @@
 > 실무에서 요구하는 핵심 역량을 증명하는 것을 목표로 합니다.
 
 ### 지원 목표 공고
-- **이스트게임즈** - 모바일 RTS 클라이언트 프로그래머 (신입)
-- **이스트게임즈** - MMORPG 클라이언트 프로그래머 (신입)
-- **이스트게임즈** - 모바일 RTS 서버 프로그래머 (신입)
-- **111퍼센트** - QA인턴십 Quality Player 3기
+- **이스트게임즈** - 모바일 RTS 클라이언트 프로그래머 (신입) ⭐
+- **이스트게임즈** - MMORPG 클라이언트 프로그래머 (신입) ⭐
+- **이스트게임즈** - 모바일 RTS 서버 프로그래머 (신입) ⭐
+- **111퍼센트** - QA인턴십 Quality Player 3기 (마감: 2026.06.14)
 
 ### 어필 포인트
 | 역량 | 구현 내용 |
 |------|-----------|
-| C#/Unity 실무 | 유닛 제어, 건물 시스템, 리소스 관리 |
-| UGUI | HUD, 미니맵, 킬바, 인벤토리 UI |
-| 네트워킹 | Mirror 기반 1v1 실시간 대전 |
-| 설계 능력 | 아키텍처 문서, 테스트 케이스 |
-| 데이터 관리 | OpenSpec CSV 기반 펙 관리 |
+| C#/Unity 실무 | 유닛 제어, 건물 시스템, 리소스 관리, 영웅/인벤토리/퀘스트 |
+| UGUI | HUD, 미니맵, 스킬바, 인벤토리 UI, 메인 메뉴, 로비 |
+| 네트워킹 | Mirror 기반 1v1 실시간 대전, 서버 권한 검증, 상태 동기화 |
+| 설계 능력 | 아키텍처 문서, 테스트 케이스 23건 (통과율 95%) |
+| 데이터 관리 | OpenSpec CSV 기반 스펙 관리, 자동 문서 생성 |
+| AI 시스템 | 적 유닛 AI 컨트롤러 (Easy/Normal/Hard 난이도) |
 
 ---
 
 ## 🎮 프로젝트 개요
 
-**장르:** RTS + RPG 하이브리드 모바일 게임  
+**장르:** RTS + RPG 하이브리드  
 **엔진:** Unity 6 (6000.3.11f1)  
 **언어:** C#  
-**네트워킹:** Mirror
+**네트워킹:** Mirror (Server Authority)
 
 ### 게임 컨셉
 실시간 전략(RTS)으로 유닛을 생산하고 적 기지를 공략하면서, 영웅 캐릭터를 육성하는 하이브리드 게임
@@ -39,22 +40,40 @@
 
 ## ✨ 핵심 기능
 
-### RTS 시스템
+### RTS 시스템 ✓
 - **유닛 선택**: 드래그 박스 선택, Shift+클릭 다중 선택
 - **유닛 제어**: 우클릭 이동/공격 명령
 - **미니맵**: 실시간 위치 표시, 클릭으로 이동 명령
 - **리소스 관리**: 골드/마나 자동 생성, 건물/유닛 생산에 사용
-- **건물 시스템**: 기지, 병영, 자원 생산 건물
+- **건물 시스템**: 기지, 병영, 자원 생산 건물, 건설 시스템
 
-### RPG 시스템
+### RPG 시스템 ✓
 - **영웅 캐릭터**: 고유 스킬, 레벨업, 장비 시스템
-- **스킬 시스템**: 액티브/패시브 스킬, 쿨다운, 마나 소모
-- **인벤토리**: 장비 착용, 아이템 사용, 장비 bonuses
-- **퀘스트 시스템**: 일일 퀘스트, 메인 퀘스트, 보상
+- **스킬 시스템**: 5종 스킬 (Fireball, Heal, Shield, Lightning, Ice Storm), 쿨다운, 마나 소모
+- **인벤토리**: 20슬롯 + 장비 슬롯, 아이템 사용, 장비 bonuses
+- **퀘스트 시스템**: 퀘스트 수락/진행/완료, 보상
 
-### 멀티플레이 (Mirror)
-- **1v1 대전**: 실시간 유닛 동기화
-- **로비 시스템**: 매칭, 준비
+### 멀티플레이 (Mirror) ✓
+- **1v1 대전**: Mirror NetworkBehaviour 기반 실시간 유닛/건물/영웅 동기화
+- **서버 권한 검증**: CombatManager에서 공격 유효성 서버 검증, 치트 방지
+- **소유권 제어**: 각 플레이어는 자신의 유닛만 제어 가능 (hasAuthority 기반)
+- **네트워크 동기화**: SyncVar로 체력/자원/레벨 실시간 동기화
+- **게임 세션**: NetworkGameManager로 게임 시작/종료/연결 끊김 처리
+- **게임 결과**: 승리/패배 UI 표시 및 로비 복귀
+
+### 메뉴 및 로비 ✓
+- **메인 메뉴**: 타이틀, 게임 시작, 종료
+- **로비**: 호스트/접속 선택, IP 입력, 상태 표시
+- **씬 전환**: MainMenu → Lobby → GameScene 순환 플로우
+
+### AI 적 유닛 ✓
+- **AI 컨트롤러**: 적 기지 탐색, 플레이어 기지 공격
+- **3단계 난이도**: Easy / Normal / Hard (스폰 간격 차등)
+
+### 시각 효과 및 사운드
+- **유닛 스폰 이펙트**: 스폰 위치 시각적 피드백
+- **스킬 이펙트**: Impact/Projectile/Aura 이펙트 시스템
+- **AudioManager**: SFX/음악 재생 시스템 (싱글톤)
 
 ---
 
@@ -78,22 +97,27 @@ Assets/
 ├── Scripts/
 │   ├── Core/           # GameManager, SelectionManager, CommandManager
 │   ├── RTS/
-│   │   ├── Unit/       # Unit, BoxSelector, CommandInput
-│   │   ├── Building/   # 건물 시스템
-│   │   ├── Resource/   # ResourceManager, ResourceGenerator
+│   │   ├── Unit/       # Unit (NetworkBehaviour), BoxSelector, CommandInput
+│   │   ├── Building/   # Building (NetworkBehaviour), BuildingPlacer
+│   │   ├── Resource/   # ResourceManager (NetworkBehaviour), ResourceGenerator
 │   │   └── Minimap/    # MinimapController
 │   ├── RPG/
-│   │   ├── Hero/       # Hero, HeroData
+│   │   ├── Hero/       # Hero (NetworkBehaviour), HeroData
 │   │   ├── Inventory/  # Inventory, ItemData
 │   │   └── Quest/      # QuestManager
 │   ├── UI/
 │   │   ├── HUD/        # HUDController
 │   │   ├── SkillBar/   # SkillBarUI
-│   │   └── Inventory/  # InventoryUI
-│   ├── Network/        # Mirror 네트워크 매니저
-│   └── Data/           # ScriptableObject 데이터
+│   │   ├── Inventory/  # InventoryUI, BuildingUI
+│   │   └── Menu/       # MainMenuUI, LobbyUI, GameResultUI
+│   ├── Network/        # NetworkPlayer, NetworkGameManager, LobbyManager, CombatManager
+│   ├── AI/             # AIController (Easy/Normal/Hard)
+│   ├── Audio/          # AudioManager
+│   ├── Effects/        # UnitSpawnEffect, SkillEffect
+│   ├── OpenSpec/       # SpecManager, UnitSpecExample
+│   └── Editor/         # ProjectSetup, SpecImporter, NetworkSetup
 ├── Prefabs/
-├── Scenes/
+├── Scenes/             # MainMenuScene, LobbyScene, MainScene
 ├── UI/
 └── Resources/
 
@@ -114,35 +138,38 @@ Docs/
 - [x] BoxSelector (드래그 박스 선택)
 - [x] CommandInput (우클릭 명령)
 
-### Week 2: RTS 핵심 시스템
+### Week 2: RTS 핵심 시스템 ✅
 - [x] ResourceManager, ResourceGenerator
 - [x] MinimapController
-- [ ] Building 시스템
-- [ ] 유닛 생산 UI
+- [x] Building 시스템
+- [x] 유닛 생산 UI
 
-### Week 3: RPG 시스템
+### Week 3: RPG 시스템 ✅
 - [x] Hero, HeroData
 - [x] Inventory 시스템
 - [x] QuestManager
-- [ ] 스킬 이펙트/비주얼
+- [x] 스킬 이펙트/비주얼 시스템
 
-### Week 4: UI 완성
+### Week 4: UI 완성 ✅
 - [x] HUDController
 - [x] SkillBarUI
 - [x] InventoryUI
-- [ ] 메인 메뉴, 로비 UI
+- [x] 메인 메뉴, 로비 UI 스크립트
 
-### Week 5: 멀티플레이 (Mirror)
-- [ ] Mirror 세팅
-- [ ] 유닛 동기화
-- [ ] 로비 + 매칭
-- [ ] 1v1 대전 테스트
+### Week 5: 멀티플레이 (Mirror) ✅
+- [x] Mirror 패키지 설치 (manifest.json)
+- [x] NetworkBehaviour 기반 유닛/건물/영웅 동기화
+- [x] NetworkPlayer, NetworkGameManager
+- [x] CombatManager (서버 권한 검증)
+- [x] 로비 + 호스트/접속 시스템
 
-### Week 6: 폴리싱 + 문서
-- [ ] AI 적 유닛
-- [ ] 사운드/이펙트
-- [ ] 테스트 케이스 작성
-- [ ] README + GDD 작성
+### Week 6: 폴리싱 + 문서 ✅
+- [x] AI 적 유닛 (Easy/Normal/Hard)
+- [x] AudioManager 시스템
+- [x] 스킬/스폰 이펙트 시스템
+- [x] 테스트 케이스 실행 결과 기록
+- [x] README 최종 업데이트
+- [x] OpenSpec Change 아티팩트 완료
 
 ---
 

@@ -1,0 +1,43 @@
+# Ouroboros Interview 답변 - Realm Commander Portfolio Completion
+# 기획자: junwoo1206112
+
+## Core Question Resolution
+
+### Question: Single-player vs AI or Mirror networked 1v1?
+**Answer:** BOTH. The project already has both systems implemented:
+- **Option C variant** (Full networked 1v1 with AI fallback):
+  - Mirror networking: NetworkManager, NetworkPlayer, NetworkGameManager, CombatManager (server-authoritative)
+  - AI Controller: AIController with Easy/Normal/Hard difficulty for single-player practice mode
+  - Game supports both: Host a networked game OR play vs AI
+
+### Question: Match flow?
+**Answer:** 
+1. Lobby: Host game or join via IP
+2. Game start: Each player gets a base, hero, and resource generator
+3. RTS phase: Build units, gather resources, scout
+4. RPG phase: Level up hero, use skills, equip items
+5. Combat phase: Units + hero fight enemy units + base
+6. Victory: All enemy units/base destroyed → Result screen
+7. Return to lobby
+
+### Question: Current project state?
+**Answer:**
+- Week 1-4: COMPLETE (Unit, Building, Resource, Hero, Inventory, Quest, UI)
+- Week 5: COMPLETE (Mirror networking scripts, NetworkBehaviour conversions)
+- Week 6: IN PROGRESS (AI controller done, effects/audio done, docs updated)
+- 1 task remaining: Build verification (needs Unity Editor)
+
+### Question: Concrete success criteria per area?
+**Answer:**
+1. Networking: Two Unity instances can host+join, see each other's units move, combat syncs
+2. AI: Enemy units spawn, walk toward player base, attack player units on contact
+3. VFX: Unit spawn flash effect, skill impact/projectile/aura effects
+4. Audio: AudioManager singleton, SFX playback on select/attack/spawn actions
+5. UI: MainMenu → Lobby (host/join) → GameScene → Result → Lobby cycle
+
+### Non-Goals (confirmed):
+- Dedicated server infrastructure
+- Matchmaking/lobby list
+- In-game chat system
+- Mobile build optimization
+- 3D modeling/animation (placeholder primitives)

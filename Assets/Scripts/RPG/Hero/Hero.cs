@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using Mirror;
 
 namespace RealmCommander.RPG
 {
@@ -46,7 +47,8 @@ namespace RealmCommander.RPG
         public float CooldownPercent => currentCooldown / cooldown;
     }
 
-    public class Hero : MonoBehaviour
+    [RequireComponent(typeof(NetworkIdentity))]
+    public class Hero : NetworkBehaviour
     {
         [Header("Hero Data")]
         [SerializeField] private HeroData heroData;
@@ -55,6 +57,15 @@ namespace RealmCommander.RPG
         [SerializeField] private GameObject selectionIndicator;
         [SerializeField] private Renderer heroRenderer;
         [SerializeField] private Color heroColor = Color.yellow;
+
+        [SyncVar]
+        private float syncHealth;
+        [SyncVar]
+        private float syncMana;
+        [SyncVar]
+        private int syncLevel = 1;
+        [SyncVar]
+        private float syncExp;
 
         private float lastAttackTime;
         private GameObject currentTarget;
@@ -70,9 +81,6 @@ namespace RealmCommander.RPG
 
         private void Awake()
         {
-            heroData.currentHealth = heroData.maxHealth;
-            heroData.currentMana = heroData.maxMana;
-
             if (selectionIndicator != null)
             {
                 selectionIndicator.SetActive(false);
@@ -82,6 +90,26 @@ namespace RealmCommander.RPG
             {
                 heroRenderer.material.color = heroColor;
             }
+        }
+
+        public override void OnStartServer()
+        {
+            base.OnStartServer();
+            heroData.currentHealth = heroData.maxHealth;
+            heroData.currentMana = heroData.maxMana;
+            syncHealth = heroData.currentHealth;
+            syncMana = heroData.currentMana;
+            syncLevel = heroData.level;
+            syncExp = heroData.currentExp;
+        }
+
+        public override void OnStartClient()
+        {
+            base.OnStartClient();
+            heroData.currentHealth = syncHealth;
+            heroData.currentMana = syncMana;
+            heroData.level = syncLevel;
+            heroData.currentExp = syncExp;
         }
 
         private void Update()
@@ -116,6 +144,10 @@ namespace RealmCommander.RPG
             if (heroData.currentMana < heroData.maxMana)
             {
                 heroData.currentMana = Mathf.Min(heroData.maxMana, heroData.currentMana + 2f * Time.deltaTime);
+                if (isServer)
+                {
+                    syncMana = heroData.currentMana;
+                }
                 OnStatsChanged?.Invoke(heroData);
             }
         }
@@ -134,6 +166,7 @@ namespace RealmCommander.RPG
 
         public void SetSelected(bool selected)
         {
+            if (!isOwned) return;
             isSelected = selected;
             if (selectionIndicator != null)
             {
@@ -141,11 +174,13 @@ namespace RealmCommander.RPG
             }
         }
 
+        [Server]
         public void TakeDamage(float damage)
         {
             if (!IsAlive) return;
 
             heroData.currentHealth = Mathf.Max(0, heroData.currentHealth - damage);
+            syncHealth = heroData.currentHealth;
             OnStatsChanged?.Invoke(heroData);
 
             if (heroData.currentHealth <= 0)
@@ -157,12 +192,20 @@ namespace RealmCommander.RPG
         public void Heal(float amount)
         {
             heroData.currentHealth = Mathf.Min(heroData.maxHealth, heroData.currentHealth + amount);
+            if (isServer)
+            {
+                syncHealth = heroData.currentHealth;
+            }
             OnStatsChanged?.Invoke(heroData);
         }
 
         public void GainExp(float amount)
         {
             heroData.currentExp += amount;
+            if (isServer)
+            {
+                syncExp = heroData.currentExp;
+            }
 
             while (heroData.currentExp >= heroData.expToNextLevel)
             {
@@ -184,35 +227,90 @@ namespace RealmCommander.RPG
             heroData.currentMana = heroData.maxMana;
             heroData.attackDamage += 5f;
 
+            if (isServer)
+            {
+                syncLevel = heroData.level;
+                syncHealth = heroData.currentHealth;
+                syncMana = heroData.currentMana;
+                syncExp = heroData.currentExp;
+            }
+
             OnLevelUp?.Invoke();
             OnStatsChanged?.Invoke(heroData);
 
             Debug.Log($"Hero leveled up to {heroData.level}!");
         }
 
-        public bool TryCastSkill(int skillIndex, GameObject target)
+        [Command]
+        public void CmdCastSkill(int skillIndex, GameObject target)
         {
-            if (skillIndex < 0 || skillIndex >= heroData.skills.Count) return false;
+            if (skillIndex < 0 || skillIndex >= heroData.skills.Count) return;
 
             var skill = heroData.skills[skillIndex];
-            if (!skill.IsReady) return false;
-            if (heroData.currentMana < skill.manaCost) return false;
+            if (!skill.IsReady) return;
+            if (heroData.currentMana < skill.manaCost) return;
 
             heroData.currentMana -= skill.manaCost;
+            syncMana = heroData.currentMana;
             skill.currentCooldown = skill.cooldown;
 
             if (target != null)
             {
-                var targetUnit = target.GetComponent<RTS.Unit>();
-                if (targetUnit != null)
+                var combat = Network.CombatManager.Instance;
+                if (combat != null)
                 {
-                    targetUnit.TakeDamage(skill.damage);
-                    GainExp(skill.damage * 0.5f);
+                    combat.ApplySkillDamage(gameObject, target, skill.damage);
                 }
+                GainExp(skill.damage * 0.5f);
             }
 
             OnStatsChanged?.Invoke(heroData);
-            return true;
+            RpcOnSkillCast(skillIndex);
+        }
+
+        [ClientRpc]
+        private void RpcOnSkillCast(int skillIndex)
+        {
+            Debug.Log($"Skill {skillIndex} cast!");
+        }
+
+        public bool TryCastSkill(int skillIndex, GameObject target)
+        {
+            if (isServer)
+            {
+                InternalCastSkill(skillIndex, target);
+                return true;
+            }
+            else
+            {
+                CmdCastSkill(skillIndex, target);
+                return true;
+            }
+        }
+
+        private void InternalCastSkill(int skillIndex, GameObject target)
+        {
+            if (skillIndex < 0 || skillIndex >= heroData.skills.Count) return;
+
+            var skill = heroData.skills[skillIndex];
+            if (!skill.IsReady) return;
+            if (heroData.currentMana < skill.manaCost) return;
+
+            heroData.currentMana -= skill.manaCost;
+            syncMana = heroData.currentMana;
+            skill.currentCooldown = skill.cooldown;
+
+            if (target != null)
+            {
+                var combat = Network.CombatManager.Instance;
+                if (combat != null)
+                {
+                    combat.ApplySkillDamage(gameObject, target, skill.damage);
+                }
+                GainExp(skill.damage * 0.5f);
+            }
+
+            OnStatsChanged?.Invoke(heroData);
         }
 
         private void TryAttack()
@@ -223,9 +321,26 @@ namespace RealmCommander.RPG
                 var targetUnit = currentTarget.GetComponent<RTS.Unit>();
                 if (targetUnit != null)
                 {
-                    targetUnit.TakeDamage(heroData.attackDamage);
+                    if (isServer)
+                    {
+                        targetUnit.TakeDamage(heroData.attackDamage);
+                    }
+                    else
+                    {
+                        CmdRequestAttack(currentTarget);
+                    }
                     GainExp(heroData.attackDamage * 0.1f);
                 }
+            }
+        }
+
+        [Command]
+        private void CmdRequestAttack(GameObject target)
+        {
+            var combat = Network.CombatManager.Instance;
+            if (combat != null)
+            {
+                combat.ApplyCombatDamage(gameObject, target, heroData.attackDamage);
             }
         }
 
@@ -237,6 +352,18 @@ namespace RealmCommander.RPG
         private void Die()
         {
             OnDeath?.Invoke();
+
+            if (isServer)
+            {
+                RpcOnDeath();
+            }
+
+            Debug.Log("Hero has fallen!");
+        }
+
+        [ClientRpc]
+        private void RpcOnDeath()
+        {
             Debug.Log("Hero has fallen!");
         }
     }

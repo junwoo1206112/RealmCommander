@@ -51,6 +51,7 @@ crashlytics-build.properties
 # OS
 .DS_Store
 Thumbs.db
+nul
 
 # OpenSpec
 .opencode/

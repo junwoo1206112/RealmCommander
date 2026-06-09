@@ -18,6 +18,8 @@ namespace RealmCommander.RTS
         [SerializeField] private float mapSize = 100f;
         [SerializeField] private Vector2 mapBounds = new Vector2(100f, 100f);
 
+        public float MapSize => mapSize;
+
         private void Start()
         {
             if (minimapCamera != null && minimapImage != null)
