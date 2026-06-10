@@ -1,44 +1,113 @@
 using UnityEngine;
 using UnityEditor;
+using UnityEditor.SceneManagement;
 using Mirror;
 using System.Collections.Generic;
 
 namespace RealmCommander.Editor
 {
+    [InitializeOnLoad]
     public class NetworkIdentityFixer
     {
+        static NetworkIdentityFixer()
+        {
+            EditorApplication.delayCall += OnFirstUpdate;
+        }
+
+        private static void OnFirstUpdate()
+        {
+            EditorApplication.delayCall -= OnFirstUpdate;
+            EditorApplication.update += AutoFixOnStartup;
+        }
+
+        private static void AutoFixOnStartup()
+        {
+            EditorApplication.update -= AutoFixOnStartup;
+            
+            if (Application.isPlaying)
+                return;
+
+            if (!EditorPrefs.GetBool("RealmCommander_AutoFixNetworkIdentity", true))
+                return;
+
+            int fixedCount = FixAllScenesNetworkIdentities(true);
+
+            if (fixedCount > 0)
+            {
+                Debug.Log($"[AutoFix] {fixedCount}개 오브젝트에 NetworkIdentity 추가 후 씬 저장 완료");
+            }
+        }
+
         [MenuItem("Tools/Realm Commander/Fix NetworkIdentity (Enhanced)")]
         public static void FixAllNetworkIdentities()
         {
-            int fixedCount = 0;
-            var fixedObjects = new List<string>();
-
-            // 씬의 모든 GameObject 검색 (비활성 포함)
-            var allObjects = Resources.FindObjectsOfTypeAll<GameObject>();
-
-            foreach (var obj in allObjects)
+            if (Application.isPlaying)
             {
-                // 씬에 있는 오브젝트만 처리 (프리팹 제외)
-                if (!obj.scene.IsValid()) continue;
+                EditorUtility.DisplayDialog("실행 불가", "Play 모드에서는 사용할 수 없습니다.", "확인");
+                return;
+            }
 
-                // NetworkBehaviour 컴포넌트 직접 검색
-                var networkBehaviours = obj.GetComponents<NetworkBehaviour>();
+            int fixedCount = FixAllScenesNetworkIdentities(true);
+            string message = fixedCount > 0
+                ? $"{fixedCount}개의 GameObject에 NetworkIdentity를 추가하고 씬을 저장했습니다."
+                : "모든 씬이 이미 올바르게 설정되어 있습니다.";
 
-                if (networkBehaviours.Length > 0 && obj.GetComponent<NetworkIdentity>() == null)
+            EditorUtility.DisplayDialog("NetworkIdentity Fix Complete", message, "확인");
+        }
+
+        private static int FixAllScenesNetworkIdentities(bool saveScenes)
+        {
+            if (Application.isPlaying)
+                return 0;
+
+            int totalFixed = 0;
+            var loadedScenes = new HashSet<string>();
+
+            for (int i = 0; i < EditorSceneManager.sceneCount; i++)
+            {
+                loadedScenes.Add(EditorSceneManager.GetSceneAt(i).path);
+            }
+
+            var sceneGuids = AssetDatabase.FindAssets("t:Scene");
+            foreach (var guid in sceneGuids)
+            {
+                var path = AssetDatabase.GUIDToAssetPath(guid);
+                var scene = EditorSceneManager.OpenScene(path, OpenSceneMode.Additive);
+
+                var allObjects = scene.GetRootGameObjects();
+                foreach (var rootObj in allObjects)
                 {
-                    Undo.RecordObject(obj, "Add NetworkIdentity");
-                    obj.AddComponent<NetworkIdentity>();
-                    fixedCount++;
-                    fixedObjects.Add(obj.name);
-                    Debug.Log($"[FIX] Added NetworkIdentity to: {obj.name}");
+                    var allChildren = rootObj.GetComponentsInChildren<NetworkBehaviour>(true);
+                    foreach (var nb in allChildren)
+                    {
+                        var go = nb.gameObject;
+                        if (go.GetComponent<NetworkIdentity>() == null)
+                        {
+                            Undo.RecordObject(go, "Add NetworkIdentity");
+                            go.AddComponent<NetworkIdentity>();
+                            totalFixed++;
+                            Debug.Log($"[AutoFix] Added NetworkIdentity to: {go.name} in {scene.name}");
+                        }
+                    }
+                }
+
+                if (saveScenes)
+                {
+                    EditorSceneManager.SaveScene(scene);
+                }
+
+                if (!loadedScenes.Contains(path))
+                {
+                    EditorSceneManager.CloseScene(scene, true);
                 }
             }
 
-            string message = fixedCount > 0
-                ? $"{fixedCount}개의 GameObject에 NetworkIdentity를 추가했습니다:\n\n{string.Join("\n", fixedObjects)}"
-                : "NetworkIdentity가 필요한 오브젝트를 찾지 못했습니다.";
+            if (saveScenes)
+            {
+                AssetDatabase.SaveAssets();
+            }
 
-            EditorUtility.DisplayDialog("NetworkIdentity Fix Complete", message, "확인");
+            return totalFixed;
         }
 
         [MenuItem("Tools/Realm Commander/Validate Network Setup")]

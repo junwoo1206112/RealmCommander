@@ -37,7 +37,8 @@ namespace RealmCommander.UI
         {
             if (instance == null) return;
 
-            instance.resultPanel.SetActive(true);
+            if (instance.resultPanel != null)
+                instance.resultPanel.SetActive(true);
 
             if (instance.resultText != null)
             {

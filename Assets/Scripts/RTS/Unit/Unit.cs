@@ -7,7 +7,6 @@ using RealmCommander.Core;
 namespace RealmCommander.RTS
 {
     [RequireComponent(typeof(NavMeshAgent))]
-    [RequireComponent(typeof(NetworkIdentity))]
     public class Unit : NetworkBehaviour
     {
         [Header("Unit Stats")]
@@ -49,15 +48,22 @@ namespace RealmCommander.RTS
 
         private void Awake()
         {
+            if (GetComponent<NetworkIdentity>() == null)
+            {
+                gameObject.AddComponent<NetworkIdentity>();
+            }
+
             agent = GetComponent<NavMeshAgent>();
-            agent.speed = moveSpeed;
+            if (agent != null)
+            {
+                agent.speed = moveSpeed;
+            }
 
             if (isServer)
             {
                 currentHealth = maxHealth;
             }
 
-            // SelectionIndicator가 없으면 자동 생성
             if (selectionIndicator == null)
             {
                 var indicator = gameObject.AddComponent<SelectionIndicator>();
@@ -72,6 +78,8 @@ namespace RealmCommander.RTS
             UpdateTeamColor();
         }
 
+        protected override void OnValidate() { }
+
         public override void OnStartServer()
         {
             base.OnStartServer();
@@ -80,8 +88,7 @@ namespace RealmCommander.RTS
 
         private void Start()
         {
-            // 네트워크 소유권이 있거나 서버가 비활성일 때 (싱글플레이어)
-            if (isOwned || !NetworkServer.active)
+            if (isServer || isOwned || !NetworkServer.active)
             {
                 SelectionManager.Instance?.RegisterSelectableUnit(gameObject);
                 if (CommandManager.Instance != null)
@@ -90,6 +97,9 @@ namespace RealmCommander.RTS
                     CommandManager.Instance.OnAttackCommand += HandleAttackCommand;
                 }
             }
+
+            var allUnits = FindObjectsByType<Unit>(FindObjectsSortMode.None);
+            Debug.Log($"[Unit] {gameObject.name} 시작됨. 전체 유닛: {allUnits.Length}");
         }
 
         private void OnDestroy()
@@ -219,8 +229,7 @@ namespace RealmCommander.RTS
             agent.enabled = false;
             OnDeath?.Invoke();
 
-            // 네트워크 소유권이 있거나 서버가 비활성일 때 (싱글플레이어)
-            if (isOwned || !NetworkServer.active)
+            if (isServer || isOwned || !NetworkServer.active)
             {
                 SelectionManager.Instance?.UnregisterSelectableUnit(gameObject);
             }
@@ -233,6 +242,7 @@ namespace RealmCommander.RTS
             if (isServer)
             {
                 RpcOnDeath();
+                NetworkServer.Destroy(gameObject);
             }
         }
 
@@ -300,26 +310,22 @@ namespace RealmCommander.RTS
 
         private void OnMouseDown()
         {
-            // 네트워크 소유권이 있거나 서버가 비활성일 때 (싱글플레이어)
-            if (!isOwned && NetworkServer.active) return;
+            if (!isServer && !isOwned && NetworkServer.active) return;
 
-            if (Input.GetMouseButtonUp(0))
+            if (Input.GetKey(KeyCode.LeftShift))
             {
-                if (Input.GetKey(KeyCode.LeftShift))
+                if (isSelected)
                 {
-                    if (isSelected)
-                    {
-                        SelectionManager.Instance.RemoveFromSelection(gameObject);
-                    }
-                    else
-                    {
-                        SelectionManager.Instance.AddToSelection(gameObject);
-                    }
+                    SelectionManager.Instance.RemoveFromSelection(gameObject);
                 }
                 else
                 {
-                    SelectionManager.Instance.SelectUnit(gameObject);
+                    SelectionManager.Instance.AddToSelection(gameObject);
                 }
+            }
+            else
+            {
+                SelectionManager.Instance.SelectUnit(gameObject);
             }
         }
     }

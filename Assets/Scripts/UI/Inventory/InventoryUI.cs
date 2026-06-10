@@ -24,8 +24,11 @@ namespace RealmCommander.UI
                 inventory.OnInventoryChanged += RefreshUI;
             }
 
-            CreateInventorySlots();
-            RefreshUI();
+            if (inventory != null)
+            {
+                CreateInventorySlots();
+                RefreshUI();
+            }
         }
 
         private void OnDestroy()

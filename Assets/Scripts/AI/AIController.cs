@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
+using Mirror;
 using RealmCommander.RTS;
 
 namespace RealmCommander.AI
@@ -41,6 +42,8 @@ namespace RealmCommander.AI
 
         private void Update()
         {
+            if (!NetworkServer.active) return;
+
             if (Time.time - lastUpdateTime >= updateInterval)
             {
                 lastUpdateTime = Time.time;
@@ -122,7 +125,7 @@ namespace RealmCommander.AI
             var bases = FindObjectsByType<Building>(FindObjectsSortMode.None);
             foreach (var b in bases)
             {
-                if (b.BuildingType == BuildingType.Base && !b.IsAlive)
+                if (b.BuildingType == BuildingType.Base && b.IsAlive)
                 {
                     return b.transform;
                 }
@@ -154,6 +157,8 @@ namespace RealmCommander.AI
 
             GameObject unit = Instantiate(prefab, spawnPos, Quaternion.identity);
             unit.name = $"AI_{prefab.name}_{controlledUnits.Count}";
+
+            NetworkServer.Spawn(unit);
 
             var unitComponent = unit.GetComponent<Unit>();
             if (unitComponent != null)

@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEditor;
-using Mirror;
+using RealmCommander.Core;
+using RealmCommander.RTS;
 
 namespace RealmCommander.Editor
 {

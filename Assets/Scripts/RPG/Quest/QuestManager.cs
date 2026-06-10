@@ -105,6 +105,7 @@ namespace RealmCommander.RPG
             if (Instance == null)
             {
                 Instance = this;
+                DontDestroyOnLoad(gameObject);
             }
             else
             {

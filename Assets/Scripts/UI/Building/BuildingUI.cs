@@ -23,7 +23,8 @@ namespace RealmCommander.UI
 
         private void Start()
         {
-            SelectionManager.Instance.OnSelectionChanged += UpdateSelection;
+            if (SelectionManager.Instance != null)
+                SelectionManager.Instance.OnSelectionChanged += UpdateSelection;
             buildingPanel.SetActive(false);
         }
 

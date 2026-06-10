@@ -51,7 +51,7 @@ namespace RealmCommander.RTS
 
         private void Update()
         {
-            if (!isServer) return;
+            if (!NetworkServer.active || netIdentity == null) return;
             GenerateResources();
         }
 

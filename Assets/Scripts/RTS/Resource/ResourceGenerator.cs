@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using Mirror;
 
 namespace RealmCommander.RTS
 {
@@ -14,6 +15,8 @@ namespace RealmCommander.RTS
 
         private void Update()
         {
+            if (!NetworkServer.active) return;
+
             if (ResourceManager.Instance != null)
             {
                 float amount = generationRate * Time.deltaTime;

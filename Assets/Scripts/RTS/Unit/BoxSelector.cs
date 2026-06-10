@@ -95,6 +95,8 @@ namespace RealmCommander.RTS
 
         private void HandleSingleClick()
         {
+            if (mainCamera == null) return;
+
             Ray ray = mainCamera.ScreenPointToRay(Input.mousePosition);
             RaycastHit hit;
 

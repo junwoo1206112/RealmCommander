@@ -3,6 +3,7 @@ using UnityEngine.UI;
 using TMPro;
 using Mirror;
 using RealmCommander.Network;
+using UnityEngine.SceneManagement;
 
 namespace RealmCommander.UI
 {
@@ -34,6 +35,8 @@ namespace RealmCommander.UI
                 ipInputField.text = "127.0.0.1";
 
             ShowStatus("", false);
+
+            NetworkBootstrap.EnsureNetworkManager();
         }
 
         private void Update()
@@ -57,37 +60,48 @@ namespace RealmCommander.UI
 
         public void OnHostGame()
         {
-            var lobby = FindFirstObjectByType<LobbyManager>();
-            if (lobby != null)
+            var nm = NetworkBootstrap.EnsureNetworkManager();
+            if (nm == null)
             {
-                lobby.HostGame();
-                ShowStatus("Hosting game...", true);
+                Debug.LogError("Failed to create NetworkManager!");
+                return;
             }
+
+            nm.networkAddress = "0.0.0.0";
+            nm.StartHost();
+            ShowStatus("Hosting game...", true);
+            Debug.Log("[LobbyUI] Hosting game, waiting for scene change...");
         }
 
         public void OnJoinGame()
         {
             string address = ipInputField != null ? ipInputField.text : "127.0.0.1";
 
-            var lobby = FindFirstObjectByType<LobbyManager>();
-            if (lobby != null)
+            var nm = NetworkBootstrap.EnsureNetworkManager();
+            if (nm == null)
             {
-                lobby.JoinGame(address);
-                ShowStatus($"Connecting to {address}...", true);
+                Debug.LogError("Failed to create NetworkManager!");
+                return;
             }
+
+            nm.networkAddress = address;
+            nm.StartClient();
+            ShowStatus($"Connecting to {address}...", true);
+            Debug.Log($"[LobbyUI] Connecting to {address}...");
         }
 
         public void OnBackToMenu()
         {
-            var lobby = FindFirstObjectByType<LobbyManager>();
-            if (lobby != null)
+            if (NetworkServer.active)
             {
-                lobby.ReturnToMainMenu();
+                NetworkManager.singleton?.StopHost();
             }
-            else
+            else if (NetworkClient.active)
             {
-                UnityEngine.SceneManagement.SceneManager.LoadScene("MainMenuScene");
+                NetworkManager.singleton?.StopClient();
             }
+
+            SceneManager.LoadScene("MainMenuScene");
         }
 
         private void ShowStatus(string message, bool show)

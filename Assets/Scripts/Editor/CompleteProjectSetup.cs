@@ -4,6 +4,8 @@ using UnityEditor.SceneManagement;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using Mirror;
+using RealmCommander.Core;
+using RealmCommander.RTS;
 
 namespace RealmCommander.Editor
 {

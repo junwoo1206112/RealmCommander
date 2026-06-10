@@ -16,6 +16,7 @@ namespace RealmCommander.Core
             if (Instance == null)
             {
                 Instance = this;
+                DontDestroyOnLoad(gameObject);
             }
             else
             {

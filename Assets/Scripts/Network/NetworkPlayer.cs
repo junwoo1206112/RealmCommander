@@ -39,22 +39,32 @@ namespace RealmCommander.Network
             isGameReady = ready;
         }
 
+        private bool _isDestroyed;
+
+        private void OnDestroy()
+        {
+            _isDestroyed = true;
+        }
+
         private void OnPlayerNameChanged(string oldValue, string newValue)
         {
+            if (_isDestroyed || gameObject == null) return;
             gameObject.name = $"Player_{newValue}";
         }
 
         private void OnPlayerTeamChanged(int oldValue, int newValue)
         {
+            if (_isDestroyed) return;
             foreach (var renderer in GetComponentsInChildren<Renderer>())
             {
+                if (renderer == null || renderer.material == null) continue;
                 renderer.material.color = newValue == 0 ? Color.blue : Color.red;
             }
         }
 
         private void OnGUI()
         {
-            if (!isOwned) return;
+            if (_isDestroyed || netIdentity == null || !isOwned) return;
 
             Vector2 size = new Vector2(200f, 25f);
             Vector2 position = new Vector2(10f, Screen.height - size.y - 10f);

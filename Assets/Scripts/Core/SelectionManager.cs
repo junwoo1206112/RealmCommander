@@ -19,6 +19,7 @@ namespace RealmCommander.Core
             if (Instance == null)
             {
                 Instance = this;
+                DontDestroyOnLoad(gameObject);
             }
             else
             {
@@ -90,7 +91,10 @@ namespace RealmCommander.Core
             {
                 if (unit == null) continue;
 
-                Vector3 screenPos = Camera.main.WorldToScreenPoint(unit.transform.position);
+                var cam = Camera.main;
+                if (cam == null) continue;
+
+                Vector3 screenPos = cam.WorldToScreenPoint(unit.transform.position);
                 if (screenPos.z > 0 && selectionBox.Contains(new Vector2(screenPos.x, screenPos.y)))
                 {
                     selectedUnits.Add(unit);

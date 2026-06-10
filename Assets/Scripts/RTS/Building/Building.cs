@@ -6,7 +6,6 @@ using RealmCommander.Core;
 
 namespace RealmCommander.RTS
 {
-    [RequireComponent(typeof(NetworkIdentity))]
     public class Building : NetworkBehaviour
     {
         [Header("Building Settings")]
@@ -53,6 +52,11 @@ namespace RealmCommander.RTS
 
         private void Awake()
         {
+            if (GetComponent<NetworkIdentity>() == null)
+            {
+                gameObject.AddComponent<NetworkIdentity>();
+            }
+
             if (isServer)
             {
                 currentHealth = maxHealth;
@@ -66,6 +70,8 @@ namespace RealmCommander.RTS
             UpdateBuildingColor();
         }
 
+        protected override void OnValidate() { }
+
         public override void OnStartServer()
         {
             base.OnStartServer();
@@ -74,8 +80,7 @@ namespace RealmCommander.RTS
 
         private void Start()
         {
-            // 네트워크 소유권이 있거나 서버가 비활성일 때 (싱글플레이어)
-            if (isOwned || !NetworkServer.active)
+            if (isServer || isOwned || !NetworkServer.active)
             {
                 SelectionManager.Instance?.RegisterSelectableUnit(gameObject);
             }
@@ -147,8 +152,7 @@ namespace RealmCommander.RTS
 
         public void SetSelected(bool selected)
         {
-            // 네트워크 소유권이 있거나 서버가 비활성일 때 (싱글플레이어)
-            if (!isOwned && NetworkServer.active) return;
+            if (!isServer && !isOwned && NetworkServer.active) return;
             isSelected = selected;
             if (selectionIndicator != null)
             {
@@ -198,14 +202,16 @@ namespace RealmCommander.RTS
         {
             if (data == null) return;
 
+            if (ResourceManager.Instance == null) return;
+
             if (!ResourceManager.Instance.CanAfford(data.goldCost, data.manaCost))
             {
                 Debug.Log("자원이 부족합니다!");
                 return;
             }
 
-            if (!ResourceManager.Instance.SpendGold(data.goldCost)) return;
-            if (!ResourceManager.Instance.SpendMana(data.manaCost)) return;
+            ResourceManager.Instance.SpendGold(data.goldCost);
+            ResourceManager.Instance.SpendMana(data.manaCost);
 
             currentProduction.Enqueue(data);
             RpcOnProductionStarted(data.unitName);
@@ -229,14 +235,16 @@ namespace RealmCommander.RTS
         {
             if (data == null) return;
 
+            if (ResourceManager.Instance == null) return;
+
             if (!ResourceManager.Instance.CanAfford(data.goldCost, data.manaCost))
             {
                 Debug.Log("자원이 부족합니다!");
                 return;
             }
 
-            if (!ResourceManager.Instance.SpendGold(data.goldCost)) return;
-            if (!ResourceManager.Instance.SpendMana(data.manaCost)) return;
+            ResourceManager.Instance.SpendGold(data.goldCost);
+            ResourceManager.Instance.SpendMana(data.manaCost);
 
             currentProduction.Enqueue(data);
             OnProductionStarted?.Invoke(data);
@@ -287,8 +295,7 @@ namespace RealmCommander.RTS
 
         private void HandleAttackCommand(GameObject target)
         {
-            // 네트워크 소유권이 있거나 서버가 비활성일 때 (싱글플레이어)
-            if (!isOwned && NetworkServer.active) return;
+            if (!isServer && !isOwned && NetworkServer.active) return;
             if (SelectionManager.Instance == null || !SelectionManager.Instance.IsUnitSelected(gameObject)) return;
 
             if (target != null && target == gameObject)
@@ -306,8 +313,7 @@ namespace RealmCommander.RTS
         {
             OnDeath?.Invoke();
 
-            // 네트워크 소유권이 있거나 서버가 비활성일 때 (싱글플레이어)
-            if (isOwned || !NetworkServer.active)
+            if (isServer || isOwned || !NetworkServer.active)
             {
                 SelectionManager.Instance?.UnregisterSelectableUnit(gameObject);
             }
@@ -320,6 +326,7 @@ namespace RealmCommander.RTS
             if (isServer)
             {
                 RpcOnDestroyed();
+                NetworkServer.Destroy(gameObject);
             }
 
             Debug.Log($"{buildingName} 파괴됨!");
@@ -344,26 +351,22 @@ namespace RealmCommander.RTS
 
         private void OnMouseDown()
         {
-            // 네트워크 소유권이 있거나 서버가 비활성일 때 (싱글플레이어)
-            if (!isOwned && NetworkServer.active) return;
+            if (!isServer && !isOwned && NetworkServer.active) return;
 
-            if (Input.GetMouseButtonUp(0))
+            if (Input.GetKey(KeyCode.LeftShift))
             {
-                if (Input.GetKey(KeyCode.LeftShift))
+                if (isSelected)
                 {
-                    if (isSelected)
-                    {
-                        SelectionManager.Instance.RemoveFromSelection(gameObject);
-                    }
-                    else
-                    {
-                        SelectionManager.Instance.AddToSelection(gameObject);
-                    }
+                    SelectionManager.Instance.RemoveFromSelection(gameObject);
                 }
                 else
                 {
-                    SelectionManager.Instance.SelectUnit(gameObject);
+                    SelectionManager.Instance.AddToSelection(gameObject);
                 }
+            }
+            else
+            {
+                SelectionManager.Instance.SelectUnit(gameObject);
             }
         }
 

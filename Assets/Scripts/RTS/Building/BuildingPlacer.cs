@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using Mirror;
 using RealmCommander.Core;
 using RealmCommander.RTS;
 
@@ -35,6 +36,8 @@ namespace RealmCommander.RTS
         public void StartPlacement(BuildingData buildingData)
         {
             if (buildingData == null) return;
+
+            if (ResourceManager.Instance == null) return;
 
             if (!ResourceManager.Instance.CanAfford(buildingData.goldCost, buildingData.manaCost))
             {
@@ -116,11 +119,16 @@ namespace RealmCommander.RTS
 
         private void PlaceBuilding()
         {
-            if (!ResourceManager.Instance.SpendGold(currentBuilding.goldCost)) return;
-            if (!ResourceManager.Instance.SpendMana(currentBuilding.manaCost)) return;
+            if (!NetworkServer.active) return;
+
+            if (!CanAffordBuilding()) return;
+            ResourceManager.Instance.SpendGold(currentBuilding.goldCost);
+            ResourceManager.Instance.SpendMana(currentBuilding.manaCost);
 
             GameObject buildingObj = Instantiate(currentBuilding.buildingPrefab, placementPosition, Quaternion.identity);
             buildingObj.name = currentBuilding.buildingName;
+
+            NetworkServer.Spawn(buildingObj);
 
             Building building = buildingObj.GetComponent<Building>();
             if (building != null)
@@ -129,6 +137,7 @@ namespace RealmCommander.RTS
             }
 
             isPlacing = false;
+            var placedBuilding = currentBuilding;
             currentBuilding = null;
 
             if (placementIndicator != null)
@@ -136,8 +145,14 @@ namespace RealmCommander.RTS
                 placementIndicator.SetActive(false);
             }
 
-            OnBuildingPlaced?.Invoke(currentBuilding);
-            Debug.Log($"{currentBuilding.buildingName} 건설 시작!");
+            OnBuildingPlaced?.Invoke(placedBuilding);
+            Debug.Log($"{placedBuilding.buildingName} 건설 시작!");
+        }
+
+        private bool CanAffordBuilding()
+        {
+            if (ResourceManager.Instance == null) return false;
+            return ResourceManager.Instance.CanAfford(currentBuilding.goldCost, currentBuilding.manaCost);
         }
 
         private void OnDrawGizmosSelected()

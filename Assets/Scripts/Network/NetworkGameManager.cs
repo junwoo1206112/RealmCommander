@@ -10,8 +10,9 @@ namespace RealmCommander.Network
     public class NetworkGameManager : NetworkBehaviour
     {
         [Header("Game Settings")]
-        [SerializeField] private string gameSceneName = "MainScene";
         [SerializeField] private string lobbySceneName = "LobbyScene";
+        [SerializeField] private int minPlayers = 1;
+        [SerializeField] private float autoStartDelay = 10f;
 
         [SyncVar(hook = nameof(OnGameStateChanged))]
         private GameState gameState = GameState.Idle;
@@ -33,6 +34,16 @@ namespace RealmCommander.Network
             {
                 Instance = this;
             }
+            else if (Instance != this)
+            {
+                Destroy(gameObject);
+                return;
+            }
+
+            if (GetComponent<NetworkIdentity>() == null)
+            {
+                gameObject.AddComponent<NetworkIdentity>();
+            }
         }
 
         public override void OnStartServer()
@@ -40,12 +51,15 @@ namespace RealmCommander.Network
             base.OnStartServer();
             gameState = GameState.WaitingForPlayers;
             playerCount = NetworkServer.connections.Count;
+            _autoStartTimer = 0f;
         }
+
+        private bool _playerPrefabSetupDone;
 
         public override void OnStartClient()
         {
             base.OnStartClient();
-            if (isServer)
+            if (isServer && NetworkServer.connections != null)
             {
                 playerCount = NetworkServer.connections.Count;
             }
@@ -53,35 +67,116 @@ namespace RealmCommander.Network
 
         private void Update()
         {
-            if (!isServer) return;
+            if (!_playerPrefabSetupDone && NetworkManager.singleton != null && NetworkServer.active)
+            {
+                _playerPrefabSetupDone = true;
+                var nm = NetworkManager.singleton;
+                if (nm.playerPrefab == null && NetworkBootstrap.CachedPlayerPrefab != null)
+                {
+                    nm.playerPrefab = NetworkBootstrap.CachedPlayerPrefab;
+                    nm.autoCreatePlayer = true;
+                }
+            }
+
+            if (!NetworkServer.active) return;
 
             if (gameState == GameState.WaitingForPlayers)
             {
+                if (NetworkServer.connections == null) return;
                 playerCount = NetworkServer.connections.Count;
 
-                if (playerCount >= 2)
+                bool allReady = true;
+                foreach (var conn in NetworkServer.connections.Values)
                 {
-                    bool allReady = true;
-                    foreach (var conn in NetworkServer.connections.Values)
+                    if (conn.identity == null) continue;
+                    
+                    var player = conn.identity.GetComponent<NetworkPlayer>();
+                    if (player != null && !player.isGameReady)
                     {
-                        var player = conn.identity.GetComponent<NetworkPlayer>();
-                        if (player != null && !player.isGameReady)
-                        {
-                            allReady = false;
-                            break;
-                        }
+                        allReady = false;
+                        break;
                     }
+                }
 
-                    if (allReady && playerCount >= 2)
-                    {
-                        StartGame();
-                    }
+                if (playerCount >= 1 && Input.GetKeyDown(KeyCode.Return))
+                {
+                    Debug.Log("[Game] Enter key pressed - starting game");
+                    StartGame();
+                    return;
+                }
+
+                if (allReady && playerCount >= 2)
+                {
+                    Debug.Log("[Game] All players ready - starting game");
+                    StartGame();
+                    return;
+                }
+
+                _autoStartTimer += Time.deltaTime;
+                if (_autoStartTimer >= autoStartDelay && playerCount >= 1)
+                {
+                    StartGame();
                 }
             }
 
             if (gameState == GameState.Playing)
             {
-                CheckWinCondition();
+                _winCheckTimer -= Time.deltaTime;
+                if (_winCheckTimer <= 0f)
+                {
+                    _winCheckTimer = 2f;
+                    CheckWinCondition();
+                }
+            }
+        }
+
+        private float _winCheckTimer = 2f;
+        private float _autoStartTimer;
+
+        [Server]
+        private void CheckWinCondition()
+        {
+            bool friendlyUnitAlive = false;
+            bool enemyUnitAlive = false;
+
+            var units = FindObjectsByType<RTS.Unit>(FindObjectsSortMode.None);
+            foreach (var unit in units)
+            {
+                if (unit == null || !unit.IsAlive) continue;
+
+                if (unit.IsEnemy)
+                    enemyUnitAlive = true;
+                else
+                    friendlyUnitAlive = true;
+
+                if (friendlyUnitAlive && enemyUnitAlive) break;
+            }
+
+            if (!friendlyUnitAlive || !enemyUnitAlive)
+            {
+                var buildings = FindObjectsByType<RTS.Building>(FindObjectsSortMode.None);
+                foreach (var building in buildings)
+                {
+                    if (building == null || !building.IsAlive) continue;
+
+                    bool isEnemyBase = building.BuildingType == RTS.BuildingType.Base;
+                    if (isEnemyBase)
+                    {
+                        if (building.tag == "Enemy")
+                            enemyUnitAlive = true;
+                        else
+                            friendlyUnitAlive = true;
+                    }
+                }
+            }
+
+            if (!friendlyUnitAlive && enemyUnitAlive)
+            {
+                EndGame(1);
+            }
+            else if (friendlyUnitAlive && !enemyUnitAlive)
+            {
+                EndGame(0);
             }
         }
 
@@ -90,39 +185,7 @@ namespace RealmCommander.Network
         {
             gameState = GameState.Playing;
             OnGameStarted?.Invoke();
-
-            NetworkManager.singleton.ServerChangeScene(gameSceneName);
-        }
-
-        [Server]
-        private void CheckWinCondition()
-        {
-            bool friendlyAlive = false;
-            bool enemyAlive = false;
-
-            var units = FindObjectsByType<RTS.Unit>(FindObjectsSortMode.None);
-            foreach (var unit in units)
-            {
-                if (unit == null || !unit.IsAlive) continue;
-
-                if (unit.IsEnemy)
-                {
-                    enemyAlive = true;
-                }
-                else
-                {
-                    friendlyAlive = true;
-                }
-            }
-
-            if (!friendlyAlive && enemyAlive)
-            {
-                EndGame(1);
-            }
-            else if (friendlyAlive && !enemyAlive)
-            {
-                EndGame(0);
-            }
+            Debug.Log("[Game] Game Started - State: Playing");
         }
 
         [Server]
@@ -151,6 +214,8 @@ namespace RealmCommander.Network
                 int remainingTeam = -1;
                 foreach (var conn in NetworkServer.connections.Values)
                 {
+                    if (conn.identity == null) continue;
+                    
                     var player = conn.identity.GetComponent<NetworkPlayer>();
                     if (player != null)
                     {

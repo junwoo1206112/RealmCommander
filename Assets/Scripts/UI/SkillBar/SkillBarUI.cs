@@ -18,11 +18,14 @@ namespace RealmCommander.UI
 
         private void Start()
         {
-            if (hero != null)
+            if (hero == null)
             {
-                hero.OnStatsChanged += UpdateHeroUI;
-                UpdateHeroUI(hero.Data);
+                gameObject.SetActive(false);
+                return;
             }
+
+            hero.OnStatsChanged += UpdateHeroUI;
+            UpdateHeroUI(hero.Data);
         }
 
         private void OnDestroy()
@@ -35,6 +38,7 @@ namespace RealmCommander.UI
 
         private void Update()
         {
+            if (hero == null) return;
             UpdateSkillCooldowns();
         }
 

@@ -47,7 +47,6 @@ namespace RealmCommander.RPG
         public float CooldownPercent => currentCooldown / cooldown;
     }
 
-    [RequireComponent(typeof(NetworkIdentity))]
     public class Hero : NetworkBehaviour
     {
         [Header("Hero Data")]
@@ -74,6 +73,7 @@ namespace RealmCommander.RPG
         public HeroData Data => heroData;
         public bool IsAlive => heroData.currentHealth > 0;
         public bool IsSelected => isSelected;
+        public bool IsEnemy => gameObject.CompareTag("Enemy");
 
         public event Action<HeroData> OnStatsChanged;
         public event Action OnLevelUp;
@@ -81,6 +81,11 @@ namespace RealmCommander.RPG
 
         private void Awake()
         {
+            if (GetComponent<NetworkIdentity>() == null)
+            {
+                gameObject.AddComponent<NetworkIdentity>();
+            }
+
             heroData ??= new HeroData { heroName = gameObject.name };
 
             if (selectionIndicator != null)
@@ -93,6 +98,8 @@ namespace RealmCommander.RPG
                 heroRenderer.material.color = heroColor;
             }
         }
+
+        protected override void OnValidate() { }
 
         public override void OnStartServer()
         {
