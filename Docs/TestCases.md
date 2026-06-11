@@ -1,6 +1,8 @@
 # 테스트 케이스 문서
 ## 영웅의 전장 (Realm Commander)
 
+> 아래 항목은 기능 설계 및 수동 회귀 시나리오다. 모두 실행 완료된 것으로 간주하지 않는다. 2026년 6월 11일 자동 검증으로 확인한 항목은 Windows 빌드, Host 시작, 두 연결의 팀/소유권, LAN·오버레이 IP 접속, Client 이동 명령의 서버 왕복 동기화다. 근거는 [PortfolioValidation.md](PortfolioValidation.md)에 기록되어 있다.
+
 ---
 
 ## 1. 유닛 선택 시스템

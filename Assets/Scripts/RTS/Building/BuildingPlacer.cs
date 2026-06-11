@@ -37,6 +37,12 @@ namespace RealmCommander.RTS
         {
             if (buildingData == null) return;
 
+            if (NetworkClient.active && !NetworkServer.active)
+            {
+                Debug.LogWarning("멀티플레이 Client 건설은 아직 지원되지 않습니다. Host에서 건설해 주세요.");
+                return;
+            }
+
             if (ResourceManager.Instance == null) return;
 
             if (!ResourceManager.Instance.CanAfford(buildingData.goldCost, buildingData.manaCost))
@@ -71,7 +77,9 @@ namespace RealmCommander.RTS
 
         private void HandlePlacement()
         {
-            Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+            Camera camera = Camera.main != null ? Camera.main : FindFirstObjectByType<Camera>();
+            if (camera == null) return;
+            Ray ray = camera.ScreenPointToRay(Input.mousePosition);
             RaycastHit hit;
 
             if (Physics.Raycast(ray, out hit, 1000f, groundLayer))

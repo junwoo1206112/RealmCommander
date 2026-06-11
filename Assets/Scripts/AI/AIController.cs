@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.AI;
 using Mirror;
 using RealmCommander.RTS;
+using RealmCommander.Network;
 
 namespace RealmCommander.AI
 {
@@ -18,6 +19,17 @@ namespace RealmCommander.AI
         [Header("AI Settings")]
         [SerializeField] private AIDifficulty difficulty = AIDifficulty.Normal;
         [SerializeField] private float updateInterval = 1f;
+        private bool hasHumanEnemy;
+
+        private bool ShouldControlEnemies
+        {
+            get
+            {
+                if (!NetworkServer.active) return false;
+                if (hasHumanEnemy) return false;
+                return true;
+            }
+        }
 
         [Header("Unit Spawning")]
         [SerializeField] private GameObject[] unitPrefabs;
@@ -32,22 +44,61 @@ namespace RealmCommander.AI
         private Transform playerBase;
         private float lastUpdateTime;
         private float lastSpawnTime;
+        private float lastDiscoveryTime;
+        private float lastHumanCheckTime;
 
         public AIDifficulty Difficulty => difficulty;
 
         private void Start()
         {
             playerBase = FindPlayerBase();
+            CheckForHumanEnemy();
+            RegisterExistingEnemyUnits();
+        }
+
+        private void CheckForHumanEnemy()
+        {
+            bool previouslyHadHumanEnemy = hasHumanEnemy;
+            hasHumanEnemy = false;
+            foreach (var conn in NetworkServer.connections.Values)
+            {
+                if (conn.identity == null) continue;
+                var player = conn.identity.GetComponent<NetworkPlayer>();
+                if (player != null && player.teamId == 1)
+                {
+                    hasHumanEnemy = true;
+                    break;
+                }
+            }
+
+            if (!previouslyHadHumanEnemy && hasHumanEnemy)
+            {
+                foreach (GameObject unit in controlledUnits)
+                    unit?.GetComponent<Unit>()?.ClearTarget();
+            }
         }
 
         private void Update()
         {
             if (!NetworkServer.active) return;
 
+            if (Time.time - lastHumanCheckTime >= 1f)
+            {
+                lastHumanCheckTime = Time.time;
+                CheckForHumanEnemy();
+            }
+            if (!ShouldControlEnemies) return;
+
             if (Time.time - lastUpdateTime >= updateInterval)
             {
                 lastUpdateTime = Time.time;
                 UpdateAI();
+            }
+
+            if (Time.time - lastDiscoveryTime >= 2f)
+            {
+                lastDiscoveryTime = Time.time;
+                RegisterExistingEnemyUnits();
             }
 
             if (Time.time - lastSpawnTime >= GetSpawnInterval())
@@ -67,6 +118,16 @@ namespace RealmCommander.AI
                 return;
             }
 
+            var aliveEnemies = FindObjectsByType<Unit>(FindObjectsSortMode.None);
+            int enemyCount = 0;
+            foreach (var u in aliveEnemies)
+                if (!u.IsEnemy && u.IsAlive) enemyCount++;
+
+            GameObject[] enemyCache = new GameObject[enemyCount];
+            int idx = 0;
+            foreach (var u in aliveEnemies)
+                if (!u.IsEnemy && u.IsAlive) enemyCache[idx++] = u.gameObject;
+
             foreach (var unit in controlledUnits)
             {
                 if (unit == null) continue;
@@ -74,25 +135,34 @@ namespace RealmCommander.AI
                 var unitComponent = unit.GetComponent<Unit>();
                 if (unitComponent == null) continue;
 
-                GameObject nearestEnemy = FindNearestEnemy(unit.transform.position);
+                GameObject nearestEnemy = null;
+                float nearestDist = 15f;
+                foreach (var e in enemyCache)
+                {
+                    float d = Vector3.Distance(unit.transform.position, e.transform.position);
+                    if (d < nearestDist) { nearestDist = d; nearestEnemy = e; }
+                }
+
                 if (nearestEnemy != null)
                 {
-                    float distanceToEnemy = Vector3.Distance(unit.transform.position, nearestEnemy.transform.position);
-                    if (distanceToEnemy < 15f)
-                    {
-                        unitComponent.SetTarget(nearestEnemy);
-                        continue;
-                    }
+                    unitComponent.SetTarget(nearestEnemy);
+                    continue;
                 }
 
                 float distanceToBase = Vector3.Distance(unit.transform.position, playerBase.position);
-                if (distanceToBase > 3f)
+                if (distanceToBase > 4f)
                 {
                     var agent = unit.GetComponent<NavMeshAgent>();
-                    if (agent != null)
+                    if (agent != null && agent.enabled && agent.isOnNavMesh)
                     {
                         agent.isStopped = false;
-                        agent.SetDestination(playerBase.position);
+                        if (!agent.hasPath || agent.remainingDistance < 1f)
+                        {
+                            unitComponent.ClearTarget();
+                            Vector3 offset = Random.insideUnitSphere * 2f;
+                            offset.y = 0;
+                            agent.SetDestination(playerBase.position + offset);
+                        }
                     }
                 }
             }
@@ -125,7 +195,7 @@ namespace RealmCommander.AI
             var bases = FindObjectsByType<Building>(FindObjectsSortMode.None);
             foreach (var b in bases)
             {
-                if (b.BuildingType == BuildingType.Base && b.IsAlive)
+                if (b.BuildingType == BuildingType.Base && b.TeamId == 0 && b.IsAlive)
                 {
                     return b.transform;
                 }
@@ -133,7 +203,7 @@ namespace RealmCommander.AI
 
             foreach (var b in bases)
             {
-                if (b.BuildingType == BuildingType.Base)
+                if (b.BuildingType == BuildingType.Base && b.TeamId == 0)
                 {
                     return b.transform;
                 }
@@ -163,6 +233,7 @@ namespace RealmCommander.AI
             var unitComponent = unit.GetComponent<Unit>();
             if (unitComponent != null)
             {
+                unitComponent.ConfigureTeam(true);
                 ApplyDifficultyStats(unitComponent);
             }
 
@@ -198,6 +269,15 @@ namespace RealmCommander.AI
             if (unit != null && !controlledUnits.Contains(unit))
             {
                 controlledUnits.Add(unit);
+            }
+        }
+
+        private void RegisterExistingEnemyUnits()
+        {
+            foreach (Unit unit in FindObjectsByType<Unit>(FindObjectsSortMode.None))
+            {
+                if (unit != null && unit.IsEnemy && unit.IsAlive)
+                    RegisterUnit(unit.gameObject);
             }
         }
 

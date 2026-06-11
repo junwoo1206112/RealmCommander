@@ -4,6 +4,8 @@ using TMPro;
 using Mirror;
 using RealmCommander.Network;
 using UnityEngine.SceneManagement;
+using System.Net;
+using System.Net.Sockets;
 
 namespace RealmCommander.UI
 {
@@ -34,6 +36,9 @@ namespace RealmCommander.UI
             if (ipInputField != null)
                 ipInputField.text = "127.0.0.1";
 
+            if (localIPText != null)
+                localIPText.text = $"LAN IP: {GetLocalIPv4()} | TCP 7777";
+
             ShowStatus("", false);
 
             NetworkBootstrap.EnsureNetworkManager();
@@ -56,6 +61,9 @@ namespace RealmCommander.UI
 
             if (backButton != null)
                 backButton.interactable = !isConnected;
+
+            if (isConnected && statusText != null)
+                statusText.text = RealmCommanderNetworkManager.LastConnectionStatus;
         }
 
         public void OnHostGame()
@@ -75,7 +83,12 @@ namespace RealmCommander.UI
 
         public void OnJoinGame()
         {
-            string address = ipInputField != null ? ipInputField.text : "127.0.0.1";
+            string address = ipInputField != null ? ipInputField.text.Trim() : "127.0.0.1";
+            if (string.IsNullOrWhiteSpace(address))
+            {
+                ShowStatus("IP address is required.", true);
+                return;
+            }
 
             var nm = NetworkBootstrap.EnsureNetworkManager();
             if (nm == null)
@@ -88,6 +101,23 @@ namespace RealmCommander.UI
             nm.StartClient();
             ShowStatus($"Connecting to {address}...", true);
             Debug.Log($"[LobbyUI] Connecting to {address}...");
+        }
+
+        private static string GetLocalIPv4()
+        {
+            try
+            {
+                foreach (IPAddress ip in Dns.GetHostEntry(Dns.GetHostName()).AddressList)
+                {
+                    if (ip.AddressFamily == AddressFamily.InterNetwork && !IPAddress.IsLoopback(ip))
+                        return ip.ToString();
+                }
+            }
+            catch (SocketException)
+            {
+            }
+
+            return "Unavailable";
         }
 
         public void OnBackToMenu()

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using Mirror;
 
 namespace RealmCommander.Core
 {
@@ -34,6 +35,13 @@ namespace RealmCommander.Core
             Application.targetFrameRate = 60;
         }
 
+        private void OnDestroy()
+        {
+            if (Instance == this)
+                Instance = null;
+            Time.timeScale = 1f;
+        }
+
         public void StartGame()
         {
             IsPaused = false;
@@ -43,6 +51,7 @@ namespace RealmCommander.Core
 
         public void PauseGame()
         {
+            if (NetworkClient.active && !NetworkServer.active) return;
             IsPaused = true;
             Time.timeScale = 0f;
             OnGamePaused?.Invoke();
@@ -50,6 +59,7 @@ namespace RealmCommander.Core
 
         public void ResumeGame()
         {
+            if (NetworkClient.active && !NetworkServer.active) return;
             IsPaused = false;
             Time.timeScale = gameSpeed;
             OnGameResumed?.Invoke();
@@ -57,6 +67,7 @@ namespace RealmCommander.Core
 
         public void SetGameSpeed(float speed)
         {
+            if (NetworkClient.active) return;
             gameSpeed = Mathf.Clamp(speed, 0.5f, 3f);
             if (!IsPaused)
             {

@@ -1,261 +1,78 @@
-# 영웅의 전장 (Realm Commander)
+# Realm Commander
 
-## 🎯 프로젝트 목적
+Unity 6와 Mirror로 제작한 서버 권한형 모바일 RTS 포트폴리오입니다. 핵심 목표는 Host/Client 두 플레이어가 각자 소유한 유닛을 선택하고 이동·공격하며, 서버가 권한과 전투 결과를 검증하는 작은 1v1 수직 슬라이스입니다.
 
-> **신입 게임 개발자 취업을 위한 포트폴리오 프로젝트**
->
-> 이 프로젝트는 게임 업계 신입 개발자 취업을 위해 제작되었습니다.
-> RTS와 RPG 장르를 결합하여 클라이언트 프로그래밍, 네트워킹, UI/UX 설계 등
-> 실무에서 요구하는 핵심 역량을 증명하는 것을 목표로 합니다.
+## 검증된 핵심 기능
 
-### 지원 목표 공고
-- **이스트게임즈** - 모바일 RTS 클라이언트 프로그래머 (신입) ⭐
-- **이스트게임즈** - MMORPG 클라이언트 프로그래머 (신입) ⭐
-- **이스트게임즈** - 모바일 RTS 서버 프로그래머 (신입) ⭐
-- **111퍼센트** - QA인턴십 Quality Player 3기 (마감: 2026.06.14)
+- `MainMenu -> Lobby -> MainScene` Host 흐름과 자동 게임 시작
+- Mirror Host/Client 연결, TCP `7777`, 플레이어별 `team 0/1` 배정
+- 서버가 생성한 플레이어 및 유닛 소유권
+- 팀별 Gold/Mana 분리와 서버 권한 생산 비용 처리
+- 건물 팀/소유권 동기화와 팀별 유닛 생산
+- 비소유 유닛 명령 차단과 서버 권한 이동·전투
+- `NetworkTransformReliable` 기반 위치 동기화
+- PC 박스 선택/우클릭 명령과 모바일 터치 선택/명령
+- 모바일 두 손가락 카메라, Safe Area, 가로 화면 대응
+- NavMesh 이동, 적 AI, CSV 기반 유닛·건물·스킬 데이터
+- 연결 주소와 상태를 표시하는 Host/Client 로비
 
-### 어필 포인트
-| 역량 | 구현 내용 |
-|------|-----------|
-| C#/Unity 실무 | 유닛 제어, 건물 시스템, 리소스 관리, 영웅/인벤토리/퀘스트 |
-| UGUI | HUD, 미니맵, 스킬바, 인벤토리 UI, 메인 메뉴, 로비 |
-| 네트워킹 | Mirror 기반 1v1 실시간 대전, 서버 권한 검증, 상태 동기화 |
-| 설계 능력 | 아키텍처 문서, 테스트 케이스 23건 (통과율 95%) |
-| 데이터 관리 | OpenSpec CSV 기반 스펙 관리, 자동 문서 생성 |
-| AI 시스템 | 적 유닛 AI 컨트롤러 (Easy/Normal/Hard 난이도) |
+## 실제 검증 결과
 
----
+2026년 6월 11일, Unity `6000.3.11f1` Windows Development Build에서 다음을 확인했습니다.
 
-## 🎮 프로젝트 개요
+| 검증 | 결과 |
+|---|---|
+| Windows Player 빌드 | PASS, 약 159 MB |
+| Host TCP `0.0.0.0:7777` Listen | PASS |
+| 별도 Client -> `192.168.0.90:7777` | PASS |
+| 별도 Client -> `100.80.202.35:7777` | PASS |
+| 플레이어 `team 0/1` 및 유닛 소유권 | PASS |
+| 팀별 자원 격리 및 건물 권한 일치 | PASS |
+| Client 이동 요청 -> Server 수신 -> 양쪽 위치 반영 | PASS |
 
-**장르:** RTS + RPG 하이브리드  
-**엔진:** Unity 6 (6000.3.11f1)  
-**언어:** C#  
-**네트워킹:** Mirror (Server Authority)
+자동 검증은 클라이언트가 소유한 동일 `netId` 유닛의 이동을 양쪽에서 확인한 뒤에만 성공합니다. 자세한 절차와 근거는 [Docs/PortfolioValidation.md](Docs/PortfolioValidation.md)에 있습니다.
 
-### 게임 컨셉
-실시간 전략(RTS)으로 유닛을 생산하고 적 기지를 공략하면서, 영웅 캐릭터를 육성하는 하이브리드 게임
+> `100.80.202.35` 검증은 이 PC의 오버레이 네트워크 주소를 사용한 별도 프로세스 테스트입니다. 실제 다른 물리 PC 및 공인 인터넷 NAT/공유기 포트포워딩까지 증명한 결과는 아닙니다.
 
----
+## 실행
 
-## ✨ 핵심 기능
+1. Unity Hub에서 Unity `6000.3.11f1`로 프로젝트를 엽니다.
+2. `Assets/Scenes/MainMenuScene.unity`를 실행합니다.
+3. Host는 로비에서 `Host`를 선택합니다.
+4. Client는 Host 화면에 표시되는 LAN IP와 포트 `7777`을 입력합니다.
 
-### RTS 시스템 ✓
-- **유닛 선택**: 드래그 박스 선택, Shift+클릭 다중 선택
-- **유닛 제어**: 우클릭 이동/공격 명령
-- **미니맵**: 실시간 위치 표시, 클릭으로 이동 명령
-- **리소스 관리**: 골드/마나 자동 생성, 건물/유닛 생산에 사용
-- **건물 시스템**: 기지, 병영, 자원 생산 건물, 건설 시스템
+다른 네트워크에서 직접 접속하려면 Host 방화벽의 TCP `7777` 인바운드 허용과 공유기 포트포워딩이 필요합니다. 포트 개방을 요구하지 않는 배포를 목표로 한다면 Relay 또는 전용 서버 전송 계층이 추가로 필요합니다.
 
-### RPG 시스템 ✓
-- **영웅 캐릭터**: 고유 스킬, 레벨업, 장비 시스템
-- **스킬 시스템**: 5종 스킬 (Fireball, Heal, Shield, Lightning, Ice Storm), 쿨다운, 마나 소모
-- **인벤토리**: 20슬롯 + 장비 슬롯, 아이템 사용, 장비 bonuses
-- **퀘스트 시스템**: 퀘스트 수락/진행/완료, 보상
+Windows 빌드는 Unity 메뉴 `Tools > Realm Commander > Build Windows Portfolio Player`에서 생성합니다. 결과물은 Git에서 제외된 `Builds/Windows/RealmCommander.exe`에 만들어집니다.
 
-### 멀티플레이 (Mirror) ✓
-- **1v1 대전**: Mirror NetworkBehaviour 기반 실시간 유닛/건물/영웅 동기화
-- **서버 권한 검증**: CombatManager에서 공격 유효성 서버 검증, 치트 방지
-- **소유권 제어**: 각 플레이어는 자신의 유닛만 제어 가능 (hasAuthority 기반)
-- **네트워크 동기화**: SyncVar로 체력/자원/레벨 실시간 동기화
-- **게임 세션**: NetworkGameManager로 게임 시작/종료/연결 끊김 처리
-- **게임 결과**: 승리/패배 UI 표시 및 로비 복귀
+## 기술 구조
 
-### 메뉴 및 로비 ✓
-- **메인 메뉴**: 타이틀, 게임 시작, 종료
-- **로비**: 호스트/접속 선택, IP 입력, 상태 표시
-- **씬 전환**: MainMenu → Lobby → GameScene 순환 플로우
+| 영역 | 구현 |
+|---|---|
+| Engine | Unity 6, C# |
+| Network | Mirror, Telepathy TCP, Server Authority |
+| Gameplay | Unit, Building, CombatManager, NetworkGameManager |
+| Movement | NavMeshAgent, NetworkTransformReliable |
+| Input/UI | PC RTS 입력, Mobile RTS 입력, UGUI |
+| Data | CSV + Resources, SpecManager |
+| Verification | Host flow smoke test, standalone two-process multiplayer smoke test |
 
-### AI 적 유닛 ✓
-- **AI 컨트롤러**: 적 기지 탐색, 플레이어 기지 공격
-- **3단계 난이도**: Easy / Normal / Hard (스폰 간격 차등)
+프로젝트 소유 코드는 `Assets/Scripts`에 있으며 `Assets/Mirror`는 벤더링된 외부 라이브러리입니다. 세부 설계는 [Docs/Architecture.md](Docs/Architecture.md), 범위 판단은 [Docs/ProjectDirection.md](Docs/ProjectDirection.md)를 참고하세요.
 
-### 시각 효과 및 사운드
-- **유닛 스폰 이펙트**: 스폰 위치 시각적 피드백
-- **스킬 이펙트**: Impact/Projectile/Aura 이펙트 시스템
-- **AudioManager**: SFX/음악 재생 시스템 (싱글톤)
+## 범위와 남은 한계
 
----
+- RPG의 Hero, Inventory, Quest, Skill 코드는 프로토타입 모듈이며 현재 핵심 1v1 완료 기능으로 주장하지 않습니다.
+- 경쟁형 자원은 팀별로 분리됐지만, 원격 Client의 신규 건물 배치는 아직 지원하지 않으며 UI에서 명시적으로 차단합니다.
+- 실제 외부 장비 테스트, 공인 WAN/NAT 통과, 자동 EditMode/PlayMode 테스트는 후속 검증 항목입니다.
+- 포트폴리오 제출 전 대표 스크린샷과 60~90초 플레이 영상을 추가해야 합니다.
 
-## 🛠️ 기술 스택
+## 프로젝트 문서
 
-| 기술 | 용도 |
-|------|------|
-| Unity 6 | 게임 엔진 |
-| C# | 프로그래밍 언어 |
-| Mirror | 멀티플레이 네트워킹 |
-| UGUI | UI 시스템 |
-| NavMesh | 유닛 이동/경로 찾기 |
-| ScriptableObject | 데이터 관리 |
+- [검증 보고서](Docs/PortfolioValidation.md)
+- [프로젝트 방향](Docs/ProjectDirection.md)
+- [아키텍처](Docs/Architecture.md)
+- [테스트 시나리오](Docs/TestCases.md)
+- [모바일 RTS 지원 근거](Docs/ESTgamesMobileRTSApplication.md)
 
----
-
-## 📁 프로젝트 구조
-
-```
-Assets/
-├── Mirror/              # Mirror third-party runtime/editor/transports only
-├── Scripts/
-│   ├── Core/           # GameManager, SelectionManager, CommandManager
-│   ├── RTS/
-│   │   ├── Unit/       # Unit (NetworkBehaviour), BoxSelector, CommandInput
-│   │   ├── Building/   # Building (NetworkBehaviour), BuildingPlacer
-│   │   ├── Resource/   # ResourceManager (NetworkBehaviour), ResourceGenerator
-│   │   └── Minimap/    # MinimapController
-│   ├── RPG/
-│   │   ├── Hero/       # Hero (NetworkBehaviour), HeroData
-│   │   ├── Inventory/  # Inventory, ItemData
-│   │   └── Quest/      # QuestManager
-│   ├── UI/
-│   │   ├── HUD/        # HUDController
-│   │   ├── SkillBar/   # SkillBarUI
-│   │   ├── Inventory/  # InventoryUI, BuildingUI
-│   │   └── Menu/       # MainMenuUI, LobbyUI, GameResultUI
-│   ├── Network/        # NetworkPlayer, NetworkGameManager, LobbyManager, CombatManager
-│   ├── AI/             # AIController (Easy/Normal/Hard)
-│   ├── Audio/          # AudioManager
-│   ├── Effects/        # UnitSpawnEffect, SkillEffect
-│   ├── OpenSpec/       # SpecManager, UnitSpecExample
-│   └── Editor/         # ProjectSetup, SpecImporter, NetworkSetup
-├── Prefabs/
-├── Scenes/             # MainMenuScene, LobbyScene, MainScene
-├── UI/
-└── Resources/
-
-Docs/
-├── GDD.md              # 게임 디자인 문서
-├── TestCases.md        # 테스트 케이스
-└── Architecture.md     # 아키텍처 문서
-```
-
-> `Assets/Mirror`는 외부 네트워킹 라이브러리 코드입니다. 포트폴리오 소유 코드를 쉽게 검토할 수 있도록 Mirror 예제/호스팅 샘플은 저장소에서 제외하고, 실제 프로젝트가 사용하는 런타임/에디터/트랜스포트 코드만 유지합니다.
-
----
-
-## 📅 개발 로드맵
-
-### Week 1: 기본 구조 + 유닛 제어 ✅
-- [x] 프로젝트 세팅, 폴더 구조
-- [x] GameManager, SelectionManager, CommandManager
-- [x] Unit 기본 클래스
-- [x] BoxSelector (드래그 박스 선택)
-- [x] CommandInput (우클릭 명령)
-
-### Week 2: RTS 핵심 시스템 ✅
-- [x] ResourceManager, ResourceGenerator
-- [x] MinimapController
-- [x] Building 시스템
-- [x] 유닛 생산 UI
-
-### Week 3: RPG 시스템 ✅
-- [x] Hero, HeroData
-- [x] Inventory 시스템
-- [x] QuestManager
-- [x] 스킬 이펙트/비주얼 시스템
-
-### Week 4: UI 완성 ✅
-- [x] HUDController
-- [x] SkillBarUI
-- [x] InventoryUI
-- [x] 메인 메뉴, 로비 UI 스크립트
-
-### Week 5: 멀티플레이 (Mirror) ✅
-- [x] Mirror 런타임/에디터/트랜스포트 코드 벤더링 (`Assets/Mirror`)
-- [x] NetworkBehaviour 기반 유닛/건물/영웅 동기화
-- [x] NetworkPlayer, NetworkGameManager
-- [x] CombatManager (서버 권한 검증)
-- [x] 로비 + 호스트/접속 시스템
-
-### Week 6: 폴리싱 + 문서 ✅
-- [x] AI 적 유닛 (Easy/Normal/Hard)
-- [x] AudioManager 시스템
-- [x] 스킬/스폰 이펙트 시스템
-- [x] 테스트 케이스 실행 결과 기록
-- [x] README 최종 업데이트
-- [x] OpenSpec Change 아티팩트 완료
-
----
-
-## 📊 OpenSpec 문서화 시스템
-
-### 개요
-게임 데이터(유닛, 건물, 스킬 등)를 CSV 프레드시트로 관리하고 Unity로 자동 import하는 시스템입니다.
-
-### 파일 구조
-```
-Assets/Resources/Specs/
-├── units.csv          # 유닛 스펙
-├── buildings.csv      # 건물 스펙
-── skills.csv         # 스킬 스
-└── Docs/              # 자동 생성 문서
-    ├── UnitSpecs.md
-    ├── BuildingSpecs.md
-    └── SkillSpecs.md
-```
-
-### 사용법
-
-#### 1. 스펙 Import
-```
-Tools → OpenSpec → Import All Specs
-```
-
-#### 2. 문서 생성
-```
-Tools → OpenSpec → Generate Documentation
-```
-
-#### 3. 코드에서 사용
-```csharp
-// 유닛 스펙 가져오기
-var unit = SpecManager.Instance.GetSpec("units", "unit_soldier");
-float maxHealth = SpecManager.Instance.GetProperty<float>("units", "unit_soldier", "MaxHealth");
-
-// 모든 유닛 목록
-var units = SpecManager.Instance.GetAllSpecs("units");
-```
-
-### CSV 형식
-```csv
-ID,Name,Description,MaxHealth,AttackDamage,MoveSpeed
-unit_soldier,Soldier,기본 보병,100,10,5
-unit_archer,Archer,원거리 유닛,80,15,4
-```
-
----
-
-## 🎯 지원 공고 매칭
-
-| 시스템 | 어필 공고 |
-|--------|-----------|
-| RTS (유닛 제어, 미니맵) | 이스트게임즈 - 모바일 RTS 클라이언트 |
-| RPG (영웅 성장, 스킬) | 이스트게임즈 - MMORPG 클라이언트 |
-| Mirror 멀티플레이 | 이스트게임즈 - 모바일 RTS 서버 |
-| UGUI 기반 UI | 모든 공고 |
-| 테스트 문서 | 111퍼센트 QA인턴십 |
-
----
-
-## 📸 스크린샷
-
-(개발 진행 후 추가 예정)
-
----
-
-## 📚 참고 자료
-
-- [Unity NavMesh Documentation](https://docs.unity3d.com/Manual/Navigation.html)
-- [Mirror Networking](https://mirror-networking.gitbook.io/docs/)
-- [ RTS Game Programming Patterns](https://gameprogrammingpatterns.com/)
-
----
-
-## 📝 라이선스
-
-이 프로젝트는 포트폴리오 목적으로 제작되었습니다.
-
----
-
-**개발자:** junwoo1206112  
-**이메일:** kddong135@naver.com  
-**GitHub:** https://github.com/junwoo1206112
+개발자: `junwoo1206112`
+GitHub: <https://github.com/junwoo1206112>

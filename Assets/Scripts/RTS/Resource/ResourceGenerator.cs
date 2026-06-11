@@ -9,9 +9,17 @@ namespace RealmCommander.RTS
         [SerializeField] private ResourceType resourceType = ResourceType.Gold;
         [SerializeField] private float generationRate = 5f;
         [SerializeField] private float collectionRadius = 3f;
+        [SerializeField, Range(0, 1)] private int teamId;
 
         public ResourceType ResourceType => resourceType;
         public float GenerationRate => generationRate;
+
+        private void Start()
+        {
+            Building owner = GetComponentInParent<Building>();
+            if (owner != null)
+                teamId = owner.TeamId;
+        }
 
         private void Update()
         {
@@ -24,10 +32,10 @@ namespace RealmCommander.RTS
                 switch (resourceType)
                 {
                     case ResourceType.Gold:
-                        ResourceManager.Instance.AddGold(amount);
+                        ResourceManager.Instance.AddGold(teamId, amount);
                         break;
                     case ResourceType.Mana:
-                        ResourceManager.Instance.AddMana(amount);
+                        ResourceManager.Instance.AddMana(teamId, amount);
                         break;
                 }
             }

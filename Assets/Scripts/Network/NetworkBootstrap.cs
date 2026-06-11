@@ -12,11 +12,15 @@ namespace RealmCommander.Network
         public static NetworkManager EnsureNetworkManager()
         {
             if (NetworkManager.singleton != null)
+            {
+                ConfigureNetworkPrefabs(NetworkManager.singleton);
                 return NetworkManager.singleton;
+            }
 
             var existing = Object.FindAnyObjectByType<NetworkManager>();
             if (existing != null)
             {
+                ConfigureNetworkPrefabs(existing);
                 Debug.Log("[NetworkBootstrap] Using existing NetworkManager from scene");
                 return existing;
             }
@@ -24,13 +28,13 @@ namespace RealmCommander.Network
             GameObject nmGo = new GameObject("NetworkManager");
             nmGo.SetActive(false);
             var transport = nmGo.AddComponent<TelepathyTransport>();
-            var nm = nmGo.AddComponent<NetworkManager>();
+            var nm = nmGo.AddComponent<RealmCommanderNetworkManager>();
             nm.transport = transport;
             nm.onlineScene = "Assets/Scenes/MainScene.unity";
             nm.offlineScene = "Assets/Scenes/MainMenuScene.unity";
             
-            CreatePlayerPrefab();
-            
+            ConfigureNetworkPrefabs(nm);
+
             Object.DontDestroyOnLoad(nmGo);
             nmGo.SetActive(true);
 
@@ -38,21 +42,23 @@ namespace RealmCommander.Network
             return NetworkManager.singleton;
         }
 
-        private static void CreatePlayerPrefab()
+        private static void ConfigureNetworkPrefabs(NetworkManager networkManager)
         {
-            _cachedPlayerPrefab = new GameObject("PlayerPrefab");
-            _cachedPlayerPrefab.hideFlags = HideFlags.HideAndDontSave;
-            _cachedPlayerPrefab.AddComponent<NetworkIdentity>();
-            _cachedPlayerPrefab.AddComponent<NetworkPlayer>();
-            _cachedPlayerPrefab.AddComponent<CapsuleCollider>();
-            _cachedPlayerPrefab.AddComponent<Rigidbody>();
-            
-            var renderer = _cachedPlayerPrefab.AddComponent<MeshRenderer>();
-            _cachedPlayerPrefab.AddComponent<MeshFilter>().sharedMesh = Resources.GetBuiltinResource<Mesh>("Capsule.fbx");
-            renderer.material = new Material(Shader.Find("Standard"));
-            renderer.material.color = Color.cyan;
+            _cachedPlayerPrefab = Resources.Load<GameObject>("Player");
+            if (_cachedPlayerPrefab == null)
+            {
+                Debug.LogError("[NetworkBootstrap] Resources/Player.prefab is missing.");
+                return;
+            }
 
-            Debug.Log("[NetworkBootstrap] PlayerPrefab created");
+            networkManager.playerPrefab = _cachedPlayerPrefab;
+            networkManager.autoCreatePlayer = true;
+
+            GameObject unitPrefab = Resources.Load<GameObject>("Unit");
+            if (unitPrefab != null && !networkManager.spawnPrefabs.Contains(unitPrefab))
+                networkManager.spawnPrefabs.Add(unitPrefab);
+
+            Debug.Log("[NetworkBootstrap] Network prefabs configured");
         }
     }
 }

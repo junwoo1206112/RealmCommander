@@ -25,6 +25,12 @@ namespace RealmCommander.Network
             }
         }
 
+        private void OnDestroy()
+        {
+            if (Instance == this)
+                Instance = null;
+        }
+
         [Server]
         public bool ValidateAttack(GameObject attacker, GameObject target)
         {
@@ -65,16 +71,12 @@ namespace RealmCommander.Network
             if (targetUnit != null)
             {
                 targetUnit.TakeDamage(damage);
-                RpcOnDamageApplied(target, damage);
                 return;
             }
 
             var targetBuilding = target.GetComponent<RTS.Building>();
             if (targetBuilding != null)
-            {
                 targetBuilding.TakeDamage(damage);
-                RpcOnDamageApplied(target, damage);
-            }
         }
 
         [Server]
@@ -101,22 +103,12 @@ namespace RealmCommander.Network
             if (tUnit != null && tUnit.IsAlive)
             {
                 tUnit.TakeDamage(damage);
-                RpcOnDamageApplied(target, damage);
                 return;
             }
 
             var tBuilding = target.GetComponent<RTS.Building>();
             if (tBuilding != null && tBuilding.IsAlive)
-            {
                 tBuilding.TakeDamage(damage);
-                RpcOnDamageApplied(target, damage);
-            }
-        }
-
-        [ClientRpc]
-        private void RpcOnDamageApplied(GameObject target, float damage)
-        {
-            Debug.Log($"Damage: {damage} applied to {target.name}");
         }
     }
 }

@@ -3,9 +3,12 @@ using System.Collections.Generic;
 using UnityEngine;
 using Mirror;
 using RealmCommander.Core;
+using RealmCommander.Network;
+using UnityEngine.AI;
 
 namespace RealmCommander.RTS
 {
+    [RequireComponent(typeof(NetworkIdentity))]
     public class Building : NetworkBehaviour
     {
         [Header("Building Settings")]
@@ -26,6 +29,8 @@ namespace RealmCommander.RTS
 
         [SyncVar(hook = nameof(OnHealthChanged))]
         private float currentHealth;
+        [SyncVar(hook = nameof(OnTeamChanged))]
+        [SerializeField, Range(0, 1)] private int teamId;
         private bool isSelected;
         private bool isConstructing;
         private float constructionProgress;
@@ -42,6 +47,9 @@ namespace RealmCommander.RTS
         public bool IsConstructing => isConstructing;
         public bool IsProducing => currentProduction.Count > 0;
         public float ProductionRange => productionRange;
+        public int TeamId => teamId;
+        public bool CanIssueLocalCommands => !NetworkClient.active ||
+            (NetworkPlayer.Local != null && NetworkPlayer.Local.teamId == teamId);
 
         public event Action<float, float> OnHealthChangedEvent;
         public event Action OnDeath;
@@ -52,12 +60,7 @@ namespace RealmCommander.RTS
 
         private void Awake()
         {
-            if (GetComponent<NetworkIdentity>() == null)
-            {
-                gameObject.AddComponent<NetworkIdentity>();
-            }
-
-            if (isServer)
+            if (!NetworkClient.active)
             {
                 currentHealth = maxHealth;
             }
@@ -66,6 +69,12 @@ namespace RealmCommander.RTS
             {
                 selectionIndicator.SetActive(false);
             }
+
+            NavMeshObstacle obstacle = GetComponent<NavMeshObstacle>();
+            if (obstacle == null) obstacle = gameObject.AddComponent<NavMeshObstacle>();
+            obstacle.carving = true;
+            obstacle.carveOnlyStationary = false;
+            obstacle.carvingMoveThreshold = 0.1f;
 
             UpdateBuildingColor();
         }
@@ -76,16 +85,26 @@ namespace RealmCommander.RTS
         {
             base.OnStartServer();
             currentHealth = maxHealth;
+            if (connectionToClient != null && connectionToClient.identity != null)
+            {
+                NetworkPlayer owner = connectionToClient.identity.GetComponent<NetworkPlayer>();
+                if (owner != null) teamId = owner.teamId;
+            }
+            else if (CompareTag("Enemy"))
+            {
+                teamId = 1;
+            }
+            UpdateBuildingColor();
         }
 
         private void Start()
         {
-            if (isServer || isOwned || !NetworkServer.active)
+            if (CanIssueLocalCommands)
             {
                 SelectionManager.Instance?.RegisterSelectableUnit(gameObject);
             }
 
-            if (CommandManager.Instance != null)
+            if (CanIssueLocalCommands && CommandManager.Instance != null)
             {
                 CommandManager.Instance.OnAttackCommand += HandleAttackCommand;
             }
@@ -107,6 +126,7 @@ namespace RealmCommander.RTS
         private void Update()
         {
             if (!IsAlive) return;
+            if (NetworkClient.active && !isServer) return;
 
             if (isConstructing)
             {
@@ -152,7 +172,8 @@ namespace RealmCommander.RTS
 
         public void SetSelected(bool selected)
         {
-            if (!isServer && !isOwned && NetworkServer.active) return;
+            if (!CanIssueLocalCommands) return;
+            if (isSelected == selected) return;
             isSelected = selected;
             if (selectionIndicator != null)
             {
@@ -198,25 +219,10 @@ namespace RealmCommander.RTS
         }
 
         [Command]
-        public void CmdQueueProduction(UnitProductionData data)
+        public void CmdQueueProduction(int productionIndex)
         {
-            if (data == null) return;
-
-            if (ResourceManager.Instance == null) return;
-
-            if (!ResourceManager.Instance.CanAfford(data.goldCost, data.manaCost))
-            {
-                Debug.Log("자원이 부족합니다!");
-                return;
-            }
-
-            ResourceManager.Instance.SpendGold(data.goldCost);
-            ResourceManager.Instance.SpendMana(data.manaCost);
-
-            currentProduction.Enqueue(data);
-            RpcOnProductionStarted(data.unitName);
-
-            Debug.Log($"{data.unitName} 생산 시작!");
+            if (productionIndex < 0 || productionIndex >= productionQueue.Count) return;
+            InternalQueueProduction(productionQueue[productionIndex]);
         }
 
         public void QueueProduction(UnitProductionData data)
@@ -227,7 +233,9 @@ namespace RealmCommander.RTS
             }
             else
             {
-                CmdQueueProduction(data);
+                int productionIndex = productionQueue.IndexOf(data);
+                if (productionIndex >= 0)
+                    CmdQueueProduction(productionIndex);
             }
         }
 
@@ -237,17 +245,15 @@ namespace RealmCommander.RTS
 
             if (ResourceManager.Instance == null) return;
 
-            if (!ResourceManager.Instance.CanAfford(data.goldCost, data.manaCost))
+            if (!ResourceManager.Instance.TrySpend(teamId, data.goldCost, data.manaCost))
             {
                 Debug.Log("자원이 부족합니다!");
                 return;
             }
 
-            ResourceManager.Instance.SpendGold(data.goldCost);
-            ResourceManager.Instance.SpendMana(data.manaCost);
-
             currentProduction.Enqueue(data);
             OnProductionStarted?.Invoke(data);
+            RpcOnProductionStarted(data.unitName);
 
             Debug.Log($"{data.unitName} 생산 시작!");
         }
@@ -267,10 +273,18 @@ namespace RealmCommander.RTS
             }
 
             Vector3 spawnPosition = GetSpawnPosition();
+            if (NavMesh.SamplePosition(spawnPosition, out NavMeshHit hit, productionRange, NavMesh.AllAreas))
+                spawnPosition = hit.position;
+
             GameObject unit = Instantiate(data.unitPrefab, spawnPosition, Quaternion.identity);
             unit.name = data.unitName;
 
-            NetworkServer.Spawn(unit);
+            Unit unitComponent = unit.GetComponent<Unit>();
+            unitComponent?.ConfigureTeam(teamId == 1);
+
+            NetworkConnectionToClient owner = FindTeamConnection(teamId);
+            if (owner != null) NetworkServer.Spawn(unit, owner);
+            else NetworkServer.Spawn(unit);
 
             RpcOnUnitSpawned(spawnPosition);
 
@@ -295,7 +309,7 @@ namespace RealmCommander.RTS
 
         private void HandleAttackCommand(GameObject target)
         {
-            if (!isServer && !isOwned && NetworkServer.active) return;
+            if (!CanIssueLocalCommands) return;
             if (SelectionManager.Instance == null || !SelectionManager.Instance.IsUnitSelected(gameObject)) return;
 
             if (target != null && target == gameObject)
@@ -345,13 +359,41 @@ namespace RealmCommander.RTS
         {
             if (buildingRenderer != null)
             {
-                buildingRenderer.material.color = buildingColor;
+                buildingRenderer.material.color = teamId == 1 ? Color.red : buildingColor;
             }
+        }
+
+        [Server]
+        public void ConfigureTeam(int newTeamId)
+        {
+            teamId = Mathf.Clamp(newTeamId, 0, 1);
+            gameObject.tag = teamId == 1 ? "Enemy" : "Untagged";
+            UpdateBuildingColor();
+        }
+
+        private void OnTeamChanged(int oldValue, int newValue)
+        {
+            UpdateBuildingColor();
+        }
+
+        [Server]
+        private static NetworkConnectionToClient FindTeamConnection(int requestedTeamId)
+        {
+            foreach (NetworkConnectionToClient connection in NetworkServer.connections.Values)
+            {
+                NetworkPlayer player = connection.identity != null
+                    ? connection.identity.GetComponent<NetworkPlayer>()
+                    : null;
+                if (player != null && player.teamId == requestedTeamId)
+                    return connection;
+            }
+            return null;
         }
 
         private void OnMouseDown()
         {
-            if (!isServer && !isOwned && NetworkServer.active) return;
+            if (!CanIssueLocalCommands || SelectionManager.Instance == null) return;
+            if (RTS.BoxSelector.WasClickHandled) return;
 
             if (Input.GetKey(KeyCode.LeftShift))
             {

@@ -5,9 +5,9 @@ namespace RealmCommander.RTS
 {
     public class BoxSelector : MonoBehaviour
     {
-        [SerializeField] private Camera mainCamera;
         [SerializeField] private RectTransform selectionBox;
         [SerializeField] private Canvas selectionCanvas;
+        [SerializeField] private LayerMask selectionMask = ~0;
 
         private Vector2 startPosition;
         private Vector2 endPosition;
@@ -15,14 +15,20 @@ namespace RealmCommander.RTS
 
         private void Awake()
         {
-            if (mainCamera == null)
-            {
-                mainCamera = Camera.main;
-            }
+            DontDestroyOnLoad(gameObject);
+        }
+
+        private Camera GetCamera()
+        {
+            Camera cam = Camera.main;
+            if (cam == null) cam = FindFirstObjectByType<Camera>();
+            return cam;
         }
 
         private void Update()
         {
+            if (MobileRTSInput.TouchControlsActive) return;
+            if (MobileRTSInput.EditorSimulationActive) return;
             HandleSelectionInput();
         }
 
@@ -30,17 +36,14 @@ namespace RealmCommander.RTS
         {
             if (Input.GetMouseButtonDown(0))
             {
-                if (!Input.GetKey(KeyCode.LeftShift))
-                {
-                    startPosition = Input.mousePosition;
-                    isSelecting = true;
+                startPosition = Input.mousePosition;
+                isSelecting = true;
 
-                    if (selectionBox != null)
-                    {
-                        selectionBox.gameObject.SetActive(true);
-                        selectionBox.anchoredPosition = startPosition;
-                        selectionBox.sizeDelta = Vector2.zero;
-                    }
+                if (selectionBox != null)
+                {
+                    selectionBox.gameObject.SetActive(true);
+                    selectionBox.anchoredPosition = startPosition;
+                    selectionBox.sizeDelta = Vector2.zero;
                 }
             }
 
@@ -75,6 +78,13 @@ namespace RealmCommander.RTS
             selectionBox.sizeDelta = new Vector2(Mathf.Abs(size.x), Mathf.Abs(size.y));
         }
 
+        public static bool WasClickHandled { get; private set; }
+
+        private void LateUpdate()
+        {
+            WasClickHandled = false;
+        }
+
         private void CompleteSelection()
         {
             Vector2 min = Vector2.Min(startPosition, endPosition);
@@ -85,48 +95,71 @@ namespace RealmCommander.RTS
 
             if (width < 5f && height < 5f)
             {
+                WasClickHandled = true;
                 HandleSingleClick();
                 return;
             }
 
             Rect selectionRect = new Rect(min.x, min.y, width, height);
-            SelectionManager.Instance?.SelectUnitsInBox(selectionRect);
+
+            if (Input.GetKey(KeyCode.LeftShift))
+                SelectionManager.Instance?.AddUnitsInBoxToSelection(selectionRect);
+            else
+                SelectionManager.Instance?.SelectUnitsInBox(selectionRect);
         }
 
         private void HandleSingleClick()
         {
-            if (mainCamera == null) return;
+            Camera cam = GetCamera();
+            if (cam == null) return;
 
-            Ray ray = mainCamera.ScreenPointToRay(Input.mousePosition);
+            Ray ray = cam.ScreenPointToRay(Input.mousePosition);
             RaycastHit hit;
 
-            if (Physics.Raycast(ray, out hit))
+            if (SelectionManager.Instance == null) return;
+
+            if (Physics.Raycast(ray, out hit, 1000f, selectionMask))
             {
-                var unit = hit.collider.GetComponent<Unit>();
+                var unit = hit.collider.GetComponentInParent<Unit>();
                 if (unit != null)
                 {
-                    if (Input.GetKey(KeyCode.LeftShift))
+                    if (unit.CanIssueLocalCommands)
                     {
-                        if (SelectionManager.Instance.IsUnitSelected(hit.collider.gameObject))
+                        if (Input.GetKey(KeyCode.LeftShift))
                         {
-                            SelectionManager.Instance.RemoveFromSelection(hit.collider.gameObject);
+                            if (SelectionManager.Instance.IsUnitSelected(unit.gameObject))
+                            {
+                                SelectionManager.Instance.RemoveFromSelection(unit.gameObject);
+                            }
+                            else
+                            {
+                                SelectionManager.Instance.AddToSelection(unit.gameObject);
+                            }
                         }
                         else
                         {
-                            SelectionManager.Instance.AddToSelection(hit.collider.gameObject);
+                            SelectionManager.Instance.SelectUnit(unit.gameObject);
                         }
                     }
+                    return;
+                }
+
+                Building building = hit.collider.GetComponentInParent<Building>();
+                if (building != null && building.CanIssueLocalCommands)
+                {
+                    if (Input.GetKey(KeyCode.LeftShift) && SelectionManager.Instance.IsUnitSelected(building.gameObject))
+                        SelectionManager.Instance.RemoveFromSelection(building.gameObject);
+                    else if (Input.GetKey(KeyCode.LeftShift))
+                        SelectionManager.Instance.AddToSelection(building.gameObject);
                     else
-                    {
-                        SelectionManager.Instance.SelectUnit(hit.collider.gameObject);
-                    }
+                        SelectionManager.Instance.SelectUnit(building.gameObject);
                     return;
                 }
             }
 
             if (!Input.GetKey(KeyCode.LeftShift))
             {
-                SelectionManager.Instance?.ClearSelection();
+                SelectionManager.Instance.ClearSelection();
             }
         }
 

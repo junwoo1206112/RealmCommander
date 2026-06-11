@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using UnityEngine.AI;
 
 namespace RealmCommander.Core
 {
@@ -24,9 +25,18 @@ namespace RealmCommander.Core
             }
         }
 
+        private void OnDestroy()
+        {
+            if (Instance == this)
+                Instance = null;
+        }
+
         public void IssueMoveCommand(Vector3 position)
         {
-            OnMoveCommand?.Invoke(position);
+            Vector3 final = position;
+            if (NavMesh.SamplePosition(position, out NavMeshHit hit, 2f, NavMesh.AllAreas))
+                final = hit.position;
+            OnMoveCommand?.Invoke(final);
         }
 
         public void IssueAttackCommand(GameObject target)
@@ -46,15 +56,51 @@ namespace RealmCommander.Core
         {
             if (hitInfo.collider != null)
             {
-                var targetUnit = hitInfo.collider.GetComponent<RTS.Unit>();
-                if (targetUnit != null && targetUnit.IsEnemy)
+                var targetUnit = hitInfo.collider.GetComponentInParent<RTS.Unit>();
+                if (IsHostileToSelection(targetUnit))
                 {
-                    IssueAttackCommand(hitInfo.collider.gameObject);
+                    IssueAttackCommand(targetUnit.gameObject);
+                    return;
+                }
+
+                var targetBuilding = hitInfo.collider.GetComponentInParent<RTS.Building>();
+                if (IsHostileToSelection(targetBuilding))
+                {
+                    IssueAttackCommand(targetBuilding.gameObject);
                     return;
                 }
             }
 
             IssueMoveCommand(worldPosition);
+        }
+
+        public bool IsHostileToSelection(RTS.Unit target)
+        {
+            if (target == null || SelectionManager.Instance == null) return false;
+
+            foreach (GameObject selected in SelectionManager.Instance.SelectedUnits)
+            {
+                RTS.Unit selectedUnit = selected != null ? selected.GetComponent<RTS.Unit>() : null;
+                if (selectedUnit != null)
+                    return selectedUnit.IsEnemy != target.IsEnemy;
+            }
+
+            return false;
+        }
+
+        public bool IsHostileToSelection(RTS.Building target)
+        {
+            if (target == null || SelectionManager.Instance == null) return false;
+            if (!target.IsAlive) return false;
+
+            foreach (GameObject selected in SelectionManager.Instance.SelectedUnits)
+            {
+                RTS.Unit selectedUnit = selected != null ? selected.GetComponent<RTS.Unit>() : null;
+                if (selectedUnit != null)
+                    return (target.CompareTag("Enemy")) != selectedUnit.IsEnemy;
+            }
+
+            return false;
         }
     }
 }

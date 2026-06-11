@@ -55,7 +55,7 @@ namespace RealmCommander.RPG
         public int currentCount;
 
         public bool IsCompleted => currentCount >= requiredCount;
-        public float ProgressPercent => (float)currentCount / requiredCount;
+        public float ProgressPercent => requiredCount > 0 ? (float)currentCount / requiredCount : 1f;
     }
 
     [Serializable]
@@ -113,6 +113,12 @@ namespace RealmCommander.RPG
             }
         }
 
+        private void OnDestroy()
+        {
+            if (Instance == this)
+                Instance = null;
+        }
+
         public bool AcceptQuest(string questId)
         {
             var quest = FindQuestById(questId, availableQuests);
@@ -128,6 +134,8 @@ namespace RealmCommander.RPG
 
         public void UpdateObjectiveProgress(QuestObjectiveType type, string targetId, int amount = 1)
         {
+            if (amount <= 0) return;
+            var questsToComplete = new List<QuestData>();
             foreach (var quest in activeQuests)
             {
                 if (quest.isCompleted) continue;
@@ -140,12 +148,13 @@ namespace RealmCommander.RPG
                         OnObjectiveUpdated?.Invoke(quest, objective);
 
                         if (quest.IsAllObjectivesComplete && !quest.isCompleted)
-                        {
-                            CompleteQuest(quest);
-                        }
+                            questsToComplete.Add(quest);
                     }
                 }
             }
+
+            foreach (QuestData quest in questsToComplete)
+                CompleteQuest(quest);
         }
 
         private void CompleteQuest(QuestData quest)
@@ -161,11 +170,11 @@ namespace RealmCommander.RPG
         public QuestReward TurnInQuest(string questId)
         {
             var quest = FindQuestById(questId, completedQuests);
-            if (quest == null || quest.isTurnedIn) return null;
+            if (quest == null || quest.isTurnedIn || quest.reward == null) return null;
 
             quest.isTurnedIn = true;
 
-            if (RTS.ResourceManager.Instance != null)
+            if (Mirror.NetworkServer.active && RTS.ResourceManager.Instance != null)
             {
                 RTS.ResourceManager.Instance.AddGold(quest.reward.goldReward);
             }

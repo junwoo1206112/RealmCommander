@@ -23,6 +23,9 @@ namespace RealmCommander.UI
         [SerializeField] private TextMeshProUGUI gameSpeedText;
         [SerializeField] private GameObject pausePanel;
 
+        private Unit observedUnit;
+        private Building observedBuilding;
+
         private void Start()
         {
             if (SelectionManager.Instance != null)
@@ -42,6 +45,7 @@ namespace RealmCommander.UI
 
         private void OnDestroy()
         {
+            StopObservingSelection();
             if (SelectionManager.Instance != null)
             {
                 SelectionManager.Instance.OnSelectionChanged -= UpdateSelectionUI;
@@ -76,6 +80,7 @@ namespace RealmCommander.UI
 
         private void UpdateSelectionUI(List<GameObject> selected)
         {
+            StopObservingSelection();
             if (selectionPanel == null) return;
 
             if (selected == null || selected.Count == 0)
@@ -96,17 +101,38 @@ namespace RealmCommander.UI
                 var unit = selected[0].GetComponent<RTS.Unit>();
                 if (unit != null)
                 {
-                    if (healthBar != null)
-                    {
-                        healthBar.value = unit.HealthPercent;
-                    }
+                    observedUnit = unit;
+                    observedUnit.OnHealthChangedEvent += UpdateObservedHealth;
+                    UpdateObservedHealth(unit.CurrentHealth, unit.MaxHealth);
+                    return;
+                }
 
-                    if (unitInfoText != null)
-                    {
-                        unitInfoText.text = $"HP: {Mathf.FloorToInt(unit.CurrentHealth)}/{Mathf.FloorToInt(unit.MaxHealth)}";
-                    }
+                var building = selected[0].GetComponent<Building>();
+                if (building != null)
+                {
+                    observedBuilding = building;
+                    observedBuilding.OnHealthChangedEvent += UpdateObservedHealth;
+                    UpdateObservedHealth(building.CurrentHealth, building.MaxHealth);
                 }
             }
+        }
+
+        private void UpdateObservedHealth(float current, float max)
+        {
+            if (healthBar != null)
+                healthBar.value = max > 0f ? current / max : 0f;
+            if (unitInfoText != null)
+                unitInfoText.text = $"HP: {Mathf.FloorToInt(current)}/{Mathf.FloorToInt(max)}";
+        }
+
+        private void StopObservingSelection()
+        {
+            if (observedUnit != null)
+                observedUnit.OnHealthChangedEvent -= UpdateObservedHealth;
+            if (observedBuilding != null)
+                observedBuilding.OnHealthChangedEvent -= UpdateObservedHealth;
+            observedUnit = null;
+            observedBuilding = null;
         }
 
         private void UpdateGameSpeedUI()

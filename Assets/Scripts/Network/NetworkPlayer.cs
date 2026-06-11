@@ -25,7 +25,8 @@ namespace RealmCommander.Network
         [Command]
         private void CmdSetPlayerName(string name)
         {
-            playerName = name;
+            string safeName = string.IsNullOrWhiteSpace(name) ? "Player" : name.Trim();
+            playerName = safeName.Substring(0, Mathf.Min(24, safeName.Length));
         }
 
         public void SetReady(bool ready)
@@ -40,10 +41,13 @@ namespace RealmCommander.Network
         }
 
         private bool _isDestroyed;
+        private MaterialPropertyBlock teamColorBlock;
 
         private void OnDestroy()
         {
             _isDestroyed = true;
+            if (isLocalPlayer)
+                Local = null;
         }
 
         private void OnPlayerNameChanged(string oldValue, string newValue)
@@ -55,11 +59,17 @@ namespace RealmCommander.Network
         private void OnPlayerTeamChanged(int oldValue, int newValue)
         {
             if (_isDestroyed) return;
+            if (teamColorBlock == null)
+                teamColorBlock = new MaterialPropertyBlock();
+            teamColorBlock.SetColor("_Color", newValue == 0 ? Color.blue : Color.red);
             foreach (var renderer in GetComponentsInChildren<Renderer>())
             {
-                if (renderer == null || renderer.material == null) continue;
-                renderer.material.color = newValue == 0 ? Color.blue : Color.red;
+                if (renderer == null) continue;
+                renderer.SetPropertyBlock(teamColorBlock);
             }
+
+            if (isLocalPlayer)
+                RTS.ResourceManager.Instance?.RefreshLocalDisplay();
         }
 
         private void OnGUI()

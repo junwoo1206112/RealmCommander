@@ -25,7 +25,8 @@ namespace RealmCommander.UI
         {
             if (SelectionManager.Instance != null)
                 SelectionManager.Instance.OnSelectionChanged += UpdateSelection;
-            buildingPanel.SetActive(false);
+            if (buildingPanel != null)
+                buildingPanel.SetActive(false);
         }
 
         private void OnDestroy()
@@ -45,8 +46,9 @@ namespace RealmCommander.UI
         {
             if (selected == null || selected.Count == 0)
             {
-                buildingPanel.SetActive(false);
+                if (buildingPanel != null) buildingPanel.SetActive(false);
                 selectedBuilding = null;
+                ClearProductionButtons();
                 return;
             }
 
@@ -56,14 +58,15 @@ namespace RealmCommander.UI
                 if (building != null)
                 {
                     selectedBuilding = building;
-                    buildingPanel.SetActive(true);
+                    if (buildingPanel != null) buildingPanel.SetActive(true);
                     CreateProductionButtons();
                     return;
                 }
             }
 
-            buildingPanel.SetActive(false);
+            if (buildingPanel != null) buildingPanel.SetActive(false);
             selectedBuilding = null;
+            ClearProductionButtons();
         }
 
         private void UpdateBuildingInfo()
@@ -169,6 +172,14 @@ namespace RealmCommander.UI
             {
                 building.QueueProduction(productionData);
             }
+        }
+
+        private void Update()
+        {
+            if (produceButton == null || productionData == null || building == null) return;
+            ResourceManager resources = ResourceManager.Instance;
+            produceButton.interactable = building.CanIssueLocalCommands && resources != null &&
+                resources.CanAfford(building.TeamId, productionData.goldCost, productionData.manaCost);
         }
     }
 }

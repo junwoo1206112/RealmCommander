@@ -31,11 +31,37 @@ namespace RealmCommander.Editor
                 return;
 
             int fixedCount = FixAllScenesNetworkIdentities(true);
+            fixedCount += FixAllPrefabNetworkIdentities();
 
             if (fixedCount > 0)
             {
                 Debug.Log($"[AutoFix] {fixedCount}개 오브젝트에 NetworkIdentity 추가 후 씬 저장 완료");
             }
+        }
+
+        private static int FixAllPrefabNetworkIdentities()
+        {
+            int fixedCount = 0;
+            foreach (string guid in AssetDatabase.FindAssets("t:Prefab", new[] { "Assets/Prefabs" }))
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guid);
+                using (var editScope = new PrefabUtility.EditPrefabContentsScope(path))
+                {
+                    GameObject root = editScope.prefabContentsRoot;
+                    if (root.GetComponentsInChildren<NetworkBehaviour>(true).Length == 0 ||
+                        root.GetComponent<NetworkIdentity>() != null)
+                    {
+                        continue;
+                    }
+
+                    root.AddComponent<NetworkIdentity>();
+                    fixedCount++;
+                    Debug.Log($"[AutoFix] Added NetworkIdentity to prefab: {path}");
+                }
+            }
+
+            if (fixedCount > 0) AssetDatabase.SaveAssets();
+            return fixedCount;
         }
 
         [MenuItem("Tools/Realm Commander/Fix NetworkIdentity (Enhanced)")]
@@ -53,6 +79,12 @@ namespace RealmCommander.Editor
                 : "모든 씬이 이미 올바르게 설정되어 있습니다.";
 
             EditorUtility.DisplayDialog("NetworkIdentity Fix Complete", message, "확인");
+        }
+
+        public static void RepairProjectNetworkIdentities()
+        {
+            int fixedCount = FixAllScenesNetworkIdentities(true) + FixAllPrefabNetworkIdentities();
+            Debug.Log($"[NetworkIdentityFixer] Project repair complete. Fixed: {fixedCount}");
         }
 
         private static int FixAllScenesNetworkIdentities(bool saveScenes)

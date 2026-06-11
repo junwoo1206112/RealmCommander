@@ -254,6 +254,15 @@ namespace RealmCommander.Editor
             mainCam.backgroundColor = new Color(0.1f, 0.15f, 0.2f);
             mainCam.orthographic = false;
             mainCam.fieldOfView = 50f;
+            if (mainCam.GetComponent<MobileRTSCameraController>() == null)
+            {
+                mainCam.gameObject.AddComponent<MobileRTSCameraController>();
+            }
+
+            if (Object.FindFirstObjectByType<MobileRTSInput>() == null)
+            {
+                new GameObject("MobileRTSInput").AddComponent<MobileRTSInput>();
+            }
 
             // 미니맵 카메라 생성
             GameObject minimapCamObj = new GameObject("MinimapCamera");

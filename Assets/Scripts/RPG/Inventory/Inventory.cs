@@ -44,7 +44,7 @@ namespace RealmCommander.RPG
         [SerializeField] private int equipmentSlots = 3;
 
         private List<InventorySlot> items = new List<InventorySlot>();
-        private InventorySlot[] equipment = new InventorySlot[3];
+        private InventorySlot[] equipment;
 
         public IReadOnlyList<InventorySlot> Items => items;
         public IReadOnlyList<InventorySlot> Equipment => equipment;
@@ -53,6 +53,9 @@ namespace RealmCommander.RPG
 
         private void Awake()
         {
+            inventorySize = Mathf.Max(1, inventorySize);
+            equipmentSlots = Mathf.Max(3, equipmentSlots);
+            equipment = new InventorySlot[equipmentSlots];
             for (int i = 0; i < inventorySize; i++)
             {
                 items.Add(new InventorySlot());
@@ -66,53 +69,66 @@ namespace RealmCommander.RPG
 
         public bool AddItem(ItemData item, int quantity = 1)
         {
-            if (item == null) return false;
+            if (item == null || quantity <= 0) return false;
+
+            int remaining = quantity;
 
             if (item.maxStack > 1)
             {
                 foreach (var slot in items)
                 {
-                    if (!slot.IsEmpty && slot.item.itemName == item.itemName)
+                    if (!slot.IsEmpty && slot.item == item && slot.quantity < item.maxStack)
                     {
-                        slot.quantity += quantity;
-                        OnInventoryChanged?.Invoke();
-                        return true;
+                        int added = Mathf.Min(remaining, item.maxStack - slot.quantity);
+                        slot.quantity += added;
+                        remaining -= added;
+                        if (remaining == 0) break;
                     }
                 }
             }
 
-            foreach (var slot in items)
+            while (remaining > 0)
             {
-                if (slot.IsEmpty)
-                {
-                    slot.item = item;
-                    slot.quantity = quantity;
-                    OnInventoryChanged?.Invoke();
-                    return true;
-                }
+                InventorySlot empty = items.Find(slot => slot.IsEmpty);
+                if (empty == null) break;
+                empty.item = item;
+                empty.quantity = Mathf.Min(remaining, Mathf.Max(1, item.maxStack));
+                remaining -= empty.quantity;
             }
 
-            Debug.Log("Inventory is full!");
-            return false;
+            if (remaining != quantity)
+                OnInventoryChanged?.Invoke();
+            if (remaining > 0)
+                Debug.Log("Inventory is full!");
+            return remaining == 0;
         }
 
         public bool RemoveItem(string itemName, int quantity = 1)
         {
+            if (string.IsNullOrWhiteSpace(itemName) || quantity <= 0) return false;
+            int available = 0;
+            foreach (InventorySlot slot in items)
+                if (!slot.IsEmpty && slot.item.itemName == itemName) available += slot.quantity;
+            if (available < quantity) return false;
+
+            int remaining = quantity;
             foreach (var slot in items)
             {
                 if (!slot.IsEmpty && slot.item.itemName == itemName)
                 {
-                    slot.quantity -= quantity;
+                    int removed = Mathf.Min(remaining, slot.quantity);
+                    slot.quantity -= removed;
+                    remaining -= removed;
                     if (slot.quantity <= 0)
                     {
                         slot.item = null;
                         slot.quantity = 0;
                     }
-                    OnInventoryChanged?.Invoke();
-                    return true;
+                    if (remaining == 0) break;
                 }
             }
-            return false;
+            OnInventoryChanged?.Invoke();
+            return true;
         }
 
         public bool EquipItem(int inventoryIndex)

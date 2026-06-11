@@ -1,6 +1,7 @@
 using System;
-using UnityEngine;
 using Mirror;
+using RealmCommander.Network;
+using UnityEngine;
 
 namespace RealmCommander.RTS
 {
@@ -15,15 +16,15 @@ namespace RealmCommander.RTS
         [Header("Resource Generation")]
         [SerializeField] private float goldPerSecond = 1f;
         [SerializeField] private float manaPerSecond = 0.5f;
+        [SerializeField] private float maxMana = 200f;
 
-        [SyncVar(hook = nameof(OnGoldChanged))]
-        private float currentGold;
-        [SyncVar(hook = nameof(OnManaChanged))]
-        private float currentMana;
-        private float maxMana = 200f;
+        [SyncVar(hook = nameof(OnTeam0GoldChanged))] private float team0Gold;
+        [SyncVar(hook = nameof(OnTeam1GoldChanged))] private float team1Gold;
+        [SyncVar(hook = nameof(OnTeam0ManaChanged))] private float team0Mana;
+        [SyncVar(hook = nameof(OnTeam1ManaChanged))] private float team1Mana;
 
-        public float CurrentGold => currentGold;
-        public float CurrentMana => currentMana;
+        public float CurrentGold => GetGold(GetLocalTeamId());
+        public float CurrentMana => GetMana(GetLocalTeamId());
         public float MaxMana => maxMana;
 
         public event Action<float, float> OnGoldChangedEvent;
@@ -32,91 +33,121 @@ namespace RealmCommander.RTS
         private void Awake()
         {
             if (Instance == null)
-            {
                 Instance = this;
-            }
-            else
-            {
+            else if (Instance != this)
                 Destroy(gameObject);
-                return;
-            }
+        }
+
+        private void OnDestroy()
+        {
+            if (Instance == this)
+                Instance = null;
         }
 
         public override void OnStartServer()
         {
             base.OnStartServer();
-            currentGold = startingGold;
-            currentMana = startingMana;
+            team0Gold = team1Gold = startingGold;
+            team0Mana = team1Mana = startingMana;
         }
 
         private void Update()
         {
-            if (!NetworkServer.active || netIdentity == null) return;
-            GenerateResources();
+            if (!NetworkServer.active) return;
+
+            float deltaGold = goldPerSecond * Time.deltaTime;
+            float deltaMana = manaPerSecond * Time.deltaTime;
+            AddGold(0, deltaGold);
+            AddGold(1, deltaGold);
+            AddMana(0, deltaMana);
+            AddMana(1, deltaMana);
         }
 
-        private void GenerateResources()
+        public float GetGold(int teamId) => teamId == 1 ? team1Gold : team0Gold;
+        public float GetMana(int teamId) => teamId == 1 ? team1Mana : team0Mana;
+
+        public void RefreshLocalDisplay()
         {
-            AddGold(goldPerSecond * Time.deltaTime);
-            AddMana(manaPerSecond * Time.deltaTime);
+            OnGoldChangedEvent?.Invoke(CurrentGold, 0f);
+            OnManaChangedEvent?.Invoke(CurrentMana, 0f);
+        }
+
+        public bool CanAfford(float goldCost, float manaCost) =>
+            CanAfford(GetLocalTeamId(), goldCost, manaCost);
+
+        public bool CanAfford(int teamId, float goldCost, float manaCost)
+        {
+            if (goldCost < 0f || manaCost < 0f) return false;
+            return GetGold(teamId) >= goldCost && GetMana(teamId) >= manaCost;
         }
 
         [Server]
-        public bool SpendGold(float amount)
+        public bool TrySpend(int teamId, float goldCost, float manaCost)
         {
-            if (currentGold >= amount)
+            if (!CanAfford(teamId, goldCost, manaCost)) return false;
+
+            if (teamId == 1)
             {
-                currentGold -= amount;
-                return true;
+                team1Gold -= goldCost;
+                team1Mana -= manaCost;
             }
-            return false;
-        }
-
-        [Server]
-        public bool SpendMana(float amount)
-        {
-            if (currentMana >= amount)
+            else
             {
-                currentMana -= amount;
-                return true;
+                team0Gold -= goldCost;
+                team0Mana -= manaCost;
             }
-            return false;
+            return true;
+        }
+
+        [Server] public bool SpendGold(float amount) => TrySpend(GetLocalTeamId(), amount, 0f);
+        [Server] public bool SpendMana(float amount) => TrySpend(GetLocalTeamId(), 0f, amount);
+        [Server] public void AddGold(float amount) => AddGold(GetLocalTeamId(), amount);
+        [Server] public void AddMana(float amount) => AddMana(GetLocalTeamId(), amount);
+
+        [Server]
+        public void AddGold(int teamId, float amount)
+        {
+            if (amount <= 0f) return;
+            if (teamId == 1) team1Gold += amount;
+            else team0Gold += amount;
         }
 
         [Server]
-        public void AddGold(float amount)
+        public void AddMana(int teamId, float amount)
         {
-            currentGold += amount;
+            if (amount <= 0f) return;
+            if (teamId == 1) team1Mana = Mathf.Min(maxMana, team1Mana + amount);
+            else team0Mana = Mathf.Min(maxMana, team0Mana + amount);
         }
 
         [Server]
-        public void AddMana(float amount)
-        {
-            currentMana = Mathf.Min(maxMana, currentMana + amount);
-        }
-
         public void SetMaxMana(float newMax)
         {
-            maxMana = newMax;
-            if (isServer)
-            {
-                currentMana = Mathf.Min(currentMana, maxMana);
-            }
+            maxMana = Mathf.Max(0f, newMax);
+            team0Mana = Mathf.Min(team0Mana, maxMana);
+            team1Mana = Mathf.Min(team1Mana, maxMana);
         }
 
-        public bool CanAfford(float goldCost, float manaCost)
+        private static int GetLocalTeamId()
         {
-            return currentGold >= goldCost && currentMana >= manaCost;
+            return NetworkPlayer.Local != null ? NetworkPlayer.Local.teamId : 0;
         }
 
-        private void OnGoldChanged(float oldValue, float newValue)
+        private void OnTeam0GoldChanged(float oldValue, float newValue) => NotifyGoldChanged(0, oldValue, newValue);
+        private void OnTeam1GoldChanged(float oldValue, float newValue) => NotifyGoldChanged(1, oldValue, newValue);
+        private void OnTeam0ManaChanged(float oldValue, float newValue) => NotifyManaChanged(0, oldValue, newValue);
+        private void OnTeam1ManaChanged(float oldValue, float newValue) => NotifyManaChanged(1, oldValue, newValue);
+
+        private void NotifyGoldChanged(int teamId, float oldValue, float newValue)
         {
-            OnGoldChangedEvent?.Invoke(newValue, oldValue);
+            if (teamId == GetLocalTeamId())
+                OnGoldChangedEvent?.Invoke(newValue, newValue - oldValue);
         }
 
-        private void OnManaChanged(float oldValue, float newValue)
+        private void NotifyManaChanged(int teamId, float oldValue, float newValue)
         {
-            OnManaChangedEvent?.Invoke(newValue, oldValue);
+            if (teamId == GetLocalTeamId())
+                OnManaChangedEvent?.Invoke(newValue, newValue - oldValue);
         }
     }
 }

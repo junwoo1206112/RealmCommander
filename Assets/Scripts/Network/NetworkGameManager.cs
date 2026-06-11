@@ -4,6 +4,8 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using RealmCommander.UI;
 using RealmCommander.Core;
+using RealmCommander.RTS;
+using RealmCommander.AI;
 
 namespace RealmCommander.Network
 {
@@ -44,6 +46,45 @@ namespace RealmCommander.Network
             {
                 gameObject.AddComponent<NetworkIdentity>();
             }
+
+            EnsureManagers();
+        }
+
+        private void OnDestroy()
+        {
+            if (Instance == this)
+                Instance = null;
+        }
+
+        private static void EnsureManagers()
+        {
+            if (SelectionManager.Instance == null)
+            {
+                var go = new GameObject("SelectionManager");
+                go.AddComponent<SelectionManager>();
+                Debug.Log("[Game] SelectionManager auto-created");
+            }
+
+            if (CommandManager.Instance == null)
+            {
+                var go = new GameObject("CommandManager");
+                go.AddComponent<CommandManager>();
+                Debug.Log("[Game] CommandManager auto-created");
+            }
+
+            if (GameObject.Find("CommandInput") == null)
+            {
+                var go = new GameObject("CommandInput");
+                go.AddComponent<RTS.CommandInput>();
+                Debug.Log("[Game] CommandInput auto-created");
+            }
+
+            if (GameObject.Find("BoxSelector") == null)
+            {
+                var go = new GameObject("BoxSelector");
+                go.AddComponent<RTS.BoxSelector>();
+                Debug.Log("[Game] BoxSelector auto-created");
+            }
         }
 
         public override void OnStartServer()
@@ -52,9 +93,37 @@ namespace RealmCommander.Network
             gameState = GameState.WaitingForPlayers;
             playerCount = NetworkServer.connections.Count;
             _autoStartTimer = 0f;
+
+            EnsureUnitSpawner();
+            EnsureEnemyAI();
         }
 
-        private bool _playerPrefabSetupDone;
+        [Server]
+        private void EnsureUnitSpawner()
+        {
+            if (FindAnyObjectByType<UnitSpawner>() != null)
+                return;
+
+            var spawnerGo = new GameObject("UnitSpawner (Runtime)");
+            var spawner = spawnerGo.AddComponent<UnitSpawner>();
+
+            var unitPrefab = Resources.Load<GameObject>("Unit");
+            if (unitPrefab != null)
+                spawner.Initialize(unitPrefab);
+            else
+                Debug.LogError("[Game] Resources/Unit.prefab is missing.");
+
+            spawner.SpawnUnitsNow();
+        }
+
+        [Server]
+        private void EnsureEnemyAI()
+        {
+            if (FindAnyObjectByType<AIController>() != null)
+                return;
+
+            new GameObject("Enemy AI (Runtime)").AddComponent<AIController>();
+        }
 
         public override void OnStartClient()
         {
@@ -67,17 +136,6 @@ namespace RealmCommander.Network
 
         private void Update()
         {
-            if (!_playerPrefabSetupDone && NetworkManager.singleton != null && NetworkServer.active)
-            {
-                _playerPrefabSetupDone = true;
-                var nm = NetworkManager.singleton;
-                if (nm.playerPrefab == null && NetworkBootstrap.CachedPlayerPrefab != null)
-                {
-                    nm.playerPrefab = NetworkBootstrap.CachedPlayerPrefab;
-                    nm.autoCreatePlayer = true;
-                }
-            }
-
             if (!NetworkServer.active) return;
 
             if (gameState == GameState.WaitingForPlayers)
@@ -86,9 +144,14 @@ namespace RealmCommander.Network
                 playerCount = NetworkServer.connections.Count;
 
                 bool allReady = true;
+                bool allPlayersCreated = playerCount > 0;
                 foreach (var conn in NetworkServer.connections.Values)
                 {
-                    if (conn.identity == null) continue;
+                    if (conn.identity == null)
+                    {
+                        allPlayersCreated = false;
+                        continue;
+                    }
                     
                     var player = conn.identity.GetComponent<NetworkPlayer>();
                     if (player != null && !player.isGameReady)
@@ -98,7 +161,14 @@ namespace RealmCommander.Network
                     }
                 }
 
-                if (playerCount >= 1 && Input.GetKeyDown(KeyCode.Return))
+                if (playerCount >= minPlayers && allPlayersCreated)
+                {
+                    Debug.Log("[Game] Required players created - starting game");
+                    StartGame();
+                    return;
+                }
+
+                if (playerCount >= minPlayers && Input.GetKeyDown(KeyCode.Return))
                 {
                     Debug.Log("[Game] Enter key pressed - starting game");
                     StartGame();
@@ -113,7 +183,7 @@ namespace RealmCommander.Network
                 }
 
                 _autoStartTimer += Time.deltaTime;
-                if (_autoStartTimer >= autoStartDelay && playerCount >= 1)
+                if (_autoStartTimer >= autoStartDelay && playerCount >= minPlayers)
                 {
                     StartGame();
                 }
@@ -159,10 +229,9 @@ namespace RealmCommander.Network
                 {
                     if (building == null || !building.IsAlive) continue;
 
-                    bool isEnemyBase = building.BuildingType == RTS.BuildingType.Base;
-                    if (isEnemyBase)
+                    if (building.BuildingType == RTS.BuildingType.Base)
                     {
-                        if (building.tag == "Enemy")
+                        if (building.TeamId == 1)
                             enemyUnitAlive = true;
                         else
                             friendlyUnitAlive = true;
@@ -178,19 +247,27 @@ namespace RealmCommander.Network
             {
                 EndGame(0);
             }
+            else if (!friendlyUnitAlive && !enemyUnitAlive)
+            {
+                EndGame(-1);
+            }
         }
 
         [Server]
         public void StartGame()
         {
+            if (gameState == GameState.Playing || gameState == GameState.GameOver) return;
             gameState = GameState.Playing;
             OnGameStarted?.Invoke();
+            if (GameManager.Instance != null)
+                GameManager.Instance.StartGame();
             Debug.Log("[Game] Game Started - State: Playing");
         }
 
         [Server]
         public void EndGame(int winningTeam)
         {
+            if (gameState == GameState.GameOver) return;
             gameState = GameState.GameOver;
             OnPlayerWon?.Invoke(winningTeam);
 
@@ -230,19 +307,35 @@ namespace RealmCommander.Network
 
         public void ReturnToLobby()
         {
-            if (isServer)
+            NetworkManager manager = NetworkManager.singleton;
+            if (manager == null)
             {
-                NetworkManager.singleton.ServerChangeScene(lobbySceneName);
+                SceneManager.LoadScene(lobbySceneName);
+                return;
             }
-            else
-            {
-                NetworkManager.singleton.StopClient();
-            }
+
+            manager.offlineScene = $"Assets/Scenes/{lobbySceneName}.unity";
+            if (NetworkServer.active) manager.StopHost();
+            else if (NetworkClient.active) manager.StopClient();
+            else SceneManager.LoadScene(lobbySceneName);
         }
 
         private void OnGameStateChanged(GameState oldValue, GameState newValue)
         {
             OnStateChanged?.Invoke(newValue);
+        }
+
+        private void OnGUI()
+        {
+            if (!NetworkClient.active) return;
+
+            string stateText = gameState == GameState.Playing
+                ? "전투 진행 중"
+                : "플레이어 연결 대기 중";
+            GUI.Box(new Rect(12f, 12f, 300f, 74f), string.Empty);
+            GUI.Label(new Rect(24f, 20f, 270f, 24f), $"Realm Commander - {stateText}");
+            GUI.Label(new Rect(24f, 43f, 270f, 22f), "유닛 선택: 좌클릭/드래그 | 이동·공격: 우클릭");
+            GUI.Label(new Rect(24f, 63f, 270f, 20f), $"연결 플레이어: {playerCount}");
         }
 
         public enum GameState

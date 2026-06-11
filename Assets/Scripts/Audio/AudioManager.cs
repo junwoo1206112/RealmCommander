@@ -54,6 +54,12 @@ namespace RealmCommander.Audio
             musicSource.volume = musicVolume;
         }
 
+        private void OnDestroy()
+        {
+            if (Instance == this)
+                Instance = null;
+        }
+
         public void PlayUnitSelect()
         {
             PlaySFX(unitSelectClip);
