@@ -37,8 +37,10 @@ namespace RealmCommander.RPG
         public bool IsEmpty => item == null || quantity <= 0;
     }
 
+    [AddComponentMenu("Realm Commander/Prototype/Inventory")]
     public class Inventory : MonoBehaviour
     {
+        public const string ScopeLabel = "Prototype - no persistence or production economy integration";
         [Header("Inventory Settings")]
         [SerializeField] private int inventorySize = 20;
         [SerializeField] private int equipmentSlots = 3;

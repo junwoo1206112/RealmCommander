@@ -34,7 +34,10 @@ namespace RealmCommander.Network
 
         public override void OnServerAddPlayer(NetworkConnectionToClient conn)
         {
-            if (NetworkServer.connections.Count > 2)
+            int activePlayers = 0;
+            foreach (NetworkConnectionToClient connection in NetworkServer.connections.Values)
+                if (connection.identity != null) activePlayers++;
+            if (activePlayers >= 2)
             {
                 Debug.LogWarning("[NetworkManager] Max 2 players, rejecting connection");
                 conn.Disconnect();
@@ -56,6 +59,11 @@ namespace RealmCommander.Network
 
             NetworkServer.AddPlayerForConnection(conn, player);
             AssignExistingEntities(conn, teamId);
+
+            var spawner = FindAnyObjectByType<Core.UnitSpawner>();
+            if (spawner != null)
+                spawner.ReassignOwnership();
+
             Debug.Log($"[NetworkManager] Player created for connection {conn.connectionId}, team {teamId}");
         }
 
@@ -109,6 +117,14 @@ namespace RealmCommander.Network
                     continue;
 
                 building.netIdentity.AssignClientAuthority(connection);
+            }
+
+
+            foreach (RPG.Hero hero in FindObjectsByType<RPG.Hero>(FindObjectsSortMode.None))
+            {
+                if (hero == null || hero.TeamId != teamId || hero.netIdentity.connectionToClient != null)
+                    continue;
+                hero.netIdentity.AssignClientAuthority(connection);
             }
         }
     }

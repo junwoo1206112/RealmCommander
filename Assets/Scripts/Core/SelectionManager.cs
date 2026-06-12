@@ -119,6 +119,8 @@ namespace RealmCommander.Core
                 }
             }
 
+            AddHeroesInSelectionRect(selectionBox, cam, true);
+
             OnSelectionChanged?.Invoke(selectedUnits);
         }
 
@@ -158,63 +160,17 @@ namespace RealmCommander.Core
                 }
             }
 
+            AddHeroesInSelectionRect(selectionBox, cam, false);
+
             OnSelectionChanged?.Invoke(selectedUnits);
         }
 
         private static bool IsUnitInSelectionRect(RTS.Unit unit, Rect selectionBox, Camera cam)
         {
-            Collider collider = unit.GetComponentInChildren<Collider>();
-            if (collider == null)
-            {
-                Vector3 screenPos = cam.WorldToScreenPoint(unit.transform.position);
-                return screenPos.z > 0 && selectionBox.Contains(new Vector2(screenPos.x, screenPos.y));
-            }
+            Vector3 screenPos = cam.WorldToScreenPoint(unit.transform.position);
+            if (screenPos.z <= 0) return false;
 
-            Bounds bounds = collider.bounds;
-            Vector3[] corners = GetBoundsCorners(bounds);
-
-            float minX = float.MaxValue, minY = float.MaxValue;
-            float maxX = float.MinValue, maxY = float.MinValue;
-            bool anyInFront = false;
-
-            foreach (var corner in corners)
-            {
-                Vector3 screenPoint = cam.WorldToScreenPoint(corner);
-                if (screenPoint.z > 0)
-                {
-                    anyInFront = true;
-                    minX = Mathf.Min(minX, screenPoint.x);
-                    minY = Mathf.Min(minY, screenPoint.y);
-                    maxX = Mathf.Max(maxX, screenPoint.x);
-                    maxY = Mathf.Max(maxY, screenPoint.y);
-                }
-            }
-
-            if (!anyInFront) return false;
-
-            float width = maxX - minX;
-            float height = maxY - minY;
-            if (width < 1f && height < 1f) return false;
-
-            Rect unitScreenRect = new Rect(minX, minY, width, height);
-            return selectionBox.Overlaps(unitScreenRect);
-        }
-
-        private static Vector3[] GetBoundsCorners(Bounds bounds)
-        {
-            Vector3 min = bounds.min;
-            Vector3 max = bounds.max;
-            return new Vector3[]
-            {
-                min,
-                max,
-                new Vector3(min.x, min.y, max.z),
-                new Vector3(min.x, max.y, min.z),
-                new Vector3(max.x, min.y, min.z),
-                new Vector3(min.x, max.y, max.z),
-                new Vector3(max.x, min.y, max.z),
-                new Vector3(max.x, max.y, min.z)
-            };
+            return selectionBox.Contains(new Vector2(screenPos.x, screenPos.y));
         }
 
         private void UpdateUnitSelectionVisual(GameObject unit, bool isSelected)
@@ -223,6 +179,13 @@ namespace RealmCommander.Core
             if (unitComponent != null)
             {
                 unitComponent.SetSelected(isSelected);
+                return;
+            }
+
+            var heroComponent = unit.GetComponent<RPG.Hero>();
+            if (heroComponent != null)
+            {
+                heroComponent.SetSelected(isSelected);
                 return;
             }
 
@@ -244,6 +207,21 @@ namespace RealmCommander.Core
                 if (selectedUnits[i] == unit) return i;
             }
             return -1;
+        }
+
+        private void AddHeroesInSelectionRect(Rect selectionBox, Camera cam, bool preserveSelection)
+        {
+            foreach (var hero in FindObjectsByType<RPG.Hero>(FindObjectsSortMode.None))
+            {
+                if (hero == null || !hero.IsAlive || !hero.CanIssueLocalCommands) continue;
+                if (preserveSelection && selectedLookup.Contains(hero.gameObject)) continue;
+                Vector3 screenPos = cam.WorldToScreenPoint(hero.transform.position);
+                if (screenPos.z <= 0 || !selectionBox.Contains(new Vector2(screenPos.x, screenPos.y))) continue;
+                selectableUnits.Add(hero.gameObject);
+                selectedUnits.Add(hero.gameObject);
+                selectedLookup.Add(hero.gameObject);
+                UpdateUnitSelectionVisual(hero.gameObject, true);
+            }
         }
     }
 }

@@ -3,6 +3,7 @@ using UnityEngine.AI;
 using Mirror;
 using RealmCommander.RTS;
 using RealmCommander.Network;
+using RealmCommander.RPG;
 
 namespace RealmCommander.Core
 {
@@ -11,11 +12,13 @@ namespace RealmCommander.Core
         [Header("Unit Prefabs")]
         [SerializeField] private GameObject friendlyUnitPrefab;
         [SerializeField] private GameObject enemyUnitPrefab;
+        [SerializeField] private GameObject heroPrefab;
 
-        public void Initialize(GameObject unitPrefab)
+        public void Initialize(GameObject unitPrefab, GameObject commanderHeroPrefab = null)
         {
             friendlyUnitPrefab = unitPrefab;
             enemyUnitPrefab = unitPrefab;
+            heroPrefab = commanderHeroPrefab;
         }
 
         [Header("Spawn Settings")]
@@ -42,7 +45,6 @@ namespace RealmCommander.Core
             NetworkConnectionToClient friendlyOwner = FindTeamConnection(0);
             NetworkConnectionToClient enemyOwner = FindTeamConnection(1);
 
-            // 아군 유닛 생성
             for (int i = 0; i < friendlyUnitCount; i++)
             {
                 if (friendlyUnitPrefab != null)
@@ -58,7 +60,6 @@ namespace RealmCommander.Core
                 }
             }
 
-            // 적 유닛 생성
             for (int i = 0; i < enemyUnitCount; i++)
             {
                 if (enemyUnitPrefab != null)
@@ -77,7 +78,34 @@ namespace RealmCommander.Core
                 }
             }
 
-            Debug.Log($"유닛 생성 완료: 아군 {friendlyUnitCount}명, 적 {enemyUnitCount}명");
+            SpawnHero(0, friendlySpawnPosition + new Vector3(0f, 0f, -4f), friendlyOwner);
+            SpawnHero(1, enemySpawnPosition + new Vector3(0f, 0f, 4f), enemyOwner);
+
+            Debug.Log($"[UnitSpawner] Spawned: {friendlyUnitCount} friendly, {enemyUnitCount} enemy, 2 heroes");
+        }
+
+        [Server]
+        public void ReassignOwnership()
+        {
+            foreach (RTS.Unit unit in FindObjectsByType<RTS.Unit>(FindObjectsSortMode.None))
+            {
+                if (unit == null || unit.IsEnemy) continue;
+                if (unit.netIdentity.connectionToClient != null) continue;
+
+                NetworkConnectionToClient owner = FindTeamConnection(0);
+                if (owner != null)
+                {
+                    unit.netIdentity.AssignClientAuthority(owner);
+                    Debug.Log($"[UnitSpawner] Assigned ownership of {unit.name} to connection {owner.connectionId}");
+                }
+            }
+
+            foreach (Hero hero in FindObjectsByType<Hero>(FindObjectsSortMode.None))
+            {
+                if (hero == null || hero.netIdentity.connectionToClient != null) continue;
+                NetworkConnectionToClient owner = FindTeamConnection(hero.TeamId);
+                if (owner != null) hero.netIdentity.AssignClientAuthority(owner);
+            }
         }
 
         [Server]
@@ -102,6 +130,16 @@ namespace RealmCommander.Core
                 NetworkServer.Spawn(unit, owner);
             else
                 NetworkServer.Spawn(unit);
+        }
+
+        [Server]
+        private void SpawnHero(int team, Vector3 desiredPosition, NetworkConnectionToClient owner)
+        {
+            if (heroPrefab == null) return;
+            GameObject heroObject = Instantiate(heroPrefab, GetNavMeshPosition(desiredPosition), Quaternion.identity);
+            heroObject.name = team == 0 ? "CommanderHero_Team0" : "CommanderHero_Team1";
+            heroObject.GetComponent<Hero>()?.ConfigureTeam(team);
+            SpawnWithOwner(heroObject, owner);
         }
 
         private static Vector3 GetNavMeshPosition(Vector3 desiredPosition)

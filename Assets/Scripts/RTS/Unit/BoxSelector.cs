@@ -38,19 +38,11 @@ namespace RealmCommander.RTS
             {
                 startPosition = Input.mousePosition;
                 isSelecting = true;
-
-                if (selectionBox != null)
-                {
-                    selectionBox.gameObject.SetActive(true);
-                    selectionBox.anchoredPosition = startPosition;
-                    selectionBox.sizeDelta = Vector2.zero;
-                }
             }
 
             if (Input.GetMouseButton(0) && isSelecting)
             {
                 endPosition = Input.mousePosition;
-                UpdateSelectionBox();
             }
 
             if (Input.GetMouseButtonUp(0))
@@ -60,22 +52,8 @@ namespace RealmCommander.RTS
                     endPosition = Input.mousePosition;
                     CompleteSelection();
                     isSelecting = false;
-
-                    if (selectionBox != null)
-                    {
-                        selectionBox.gameObject.SetActive(false);
-                    }
                 }
             }
-        }
-
-        private void UpdateSelectionBox()
-        {
-            if (selectionBox == null) return;
-
-            Vector2 size = endPosition - startPosition;
-            selectionBox.anchoredPosition = startPosition + size / 2f;
-            selectionBox.sizeDelta = new Vector2(Mathf.Abs(size.x), Mathf.Abs(size.y));
         }
 
         public static bool WasClickHandled { get; private set; }
@@ -93,7 +71,7 @@ namespace RealmCommander.RTS
             float width = max.x - min.x;
             float height = max.y - min.y;
 
-            if (width < 5f && height < 5f)
+            if (width < 20f && height < 20f)
             {
                 WasClickHandled = true;
                 HandleSingleClick();
@@ -144,6 +122,21 @@ namespace RealmCommander.RTS
                     return;
                 }
 
+                var hero = hit.collider.GetComponentInParent<RPG.Hero>();
+                if (hero != null)
+                {
+                    if (hero.CanIssueLocalCommands)
+                    {
+                        if (Input.GetKey(KeyCode.LeftShift) && SelectionManager.Instance.IsUnitSelected(hero.gameObject))
+                            SelectionManager.Instance.RemoveFromSelection(hero.gameObject);
+                        else if (Input.GetKey(KeyCode.LeftShift))
+                            SelectionManager.Instance.AddToSelection(hero.gameObject);
+                        else
+                            SelectionManager.Instance.SelectUnit(hero.gameObject);
+                    }
+                    return;
+                }
+
                 Building building = hit.collider.GetComponentInParent<Building>();
                 if (building != null && building.CanIssueLocalCommands)
                 {
@@ -167,8 +160,16 @@ namespace RealmCommander.RTS
         {
             if (!isSelecting) return;
 
-            GUI.color = new Color(0f, 1f, 0f, 0.3f);
-            Rect rect = GetScreenRect(startPosition, endPosition);
+            Vector2 min = Vector2.Min(startPosition, endPosition);
+            Vector2 max = Vector2.Max(startPosition, endPosition);
+            float width = max.x - min.x;
+            float height = max.y - min.y;
+
+            if (width < 2f && height < 2f) return;
+
+            Rect rect = new Rect(min.x, Screen.height - max.y, width, height);
+
+            GUI.color = new Color(0f, 1f, 0f, 0.2f);
             GUI.DrawTexture(rect, Texture2D.whiteTexture);
 
             GUI.color = Color.green;
@@ -176,13 +177,6 @@ namespace RealmCommander.RTS
             GUI.DrawTexture(new Rect(rect.x, rect.yMax, rect.width, 1), Texture2D.whiteTexture);
             GUI.DrawTexture(new Rect(rect.x, rect.y, 1, rect.height), Texture2D.whiteTexture);
             GUI.DrawTexture(new Rect(rect.xMax, rect.y, 1, rect.height), Texture2D.whiteTexture);
-        }
-
-        private Rect GetScreenRect(Vector2 start, Vector2 end)
-        {
-            Vector2 min = Vector2.Min(start, end);
-            Vector2 max = Vector2.Max(start, end);
-            return new Rect(min.x, Screen.height - max.y, max.x - min.x, max.y - min.y);
         }
     }
 }

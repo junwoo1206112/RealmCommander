@@ -13,7 +13,7 @@ namespace RealmCommander.Network
     {
         [Header("Game Settings")]
         [SerializeField] private string lobbySceneName = "LobbyScene";
-        [SerializeField] private int minPlayers = 1;
+        [SerializeField] private int minPlayers = 2;
         [SerializeField] private float autoStartDelay = 10f;
 
         [SyncVar(hook = nameof(OnGameStateChanged))]
@@ -21,6 +21,12 @@ namespace RealmCommander.Network
 
         [SyncVar]
         private int playerCount = 0;
+
+        [SyncVar(hook = nameof(OnPauseChanged))]
+        private bool isGamePaused = false;
+
+        [SyncVar(hook = nameof(OnSpeedChanged))]
+        private float syncedGameSpeed = 1f;
 
         public static NetworkGameManager Instance { get; private set; }
         public GameState State => gameState;
@@ -40,11 +46,6 @@ namespace RealmCommander.Network
             {
                 Destroy(gameObject);
                 return;
-            }
-
-            if (GetComponent<NetworkIdentity>() == null)
-            {
-                gameObject.AddComponent<NetworkIdentity>();
             }
 
             EnsureManagers();
@@ -85,13 +86,39 @@ namespace RealmCommander.Network
                 go.AddComponent<RTS.BoxSelector>();
                 Debug.Log("[Game] BoxSelector auto-created");
             }
+
+            EnsureCameraController();
+        }
+
+        private static void EnsureCameraController()
+        {
+            Camera mainCam = Camera.main;
+            if (mainCam == null)
+            {
+                var camObj = GameObject.Find("Main Camera");
+                if (camObj != null) mainCam = camObj.GetComponent<Camera>();
+            }
+            if (mainCam == null)
+            {
+                var camObj = new GameObject("Main Camera");
+                mainCam = camObj.AddComponent<Camera>();
+                mainCam.tag = "MainCamera";
+                camObj.AddComponent<AudioListener>();
+                Debug.Log("[Game] Main Camera created");
+            }
+
+            if (mainCam.GetComponent<RTS.MobileRTSCameraController>() == null)
+            {
+                mainCam.gameObject.AddComponent<RTS.MobileRTSCameraController>();
+                Debug.Log("[Game] MobileRTSCameraController added to Main Camera");
+            }
         }
 
         public override void OnStartServer()
         {
             base.OnStartServer();
             gameState = GameState.WaitingForPlayers;
-            playerCount = NetworkServer.connections.Count;
+            playerCount = CountCreatedPlayers();
             _autoStartTimer = 0f;
 
             EnsureUnitSpawner();
@@ -108,8 +135,9 @@ namespace RealmCommander.Network
             var spawner = spawnerGo.AddComponent<UnitSpawner>();
 
             var unitPrefab = Resources.Load<GameObject>("Unit");
+            var heroPrefab = Resources.Load<GameObject>("CommanderHero");
             if (unitPrefab != null)
-                spawner.Initialize(unitPrefab);
+                spawner.Initialize(unitPrefab, heroPrefab);
             else
                 Debug.LogError("[Game] Resources/Unit.prefab is missing.");
 
@@ -130,7 +158,7 @@ namespace RealmCommander.Network
             base.OnStartClient();
             if (isServer && NetworkServer.connections != null)
             {
-                playerCount = NetworkServer.connections.Count;
+                playerCount = CountCreatedPlayers();
             }
         }
 
@@ -141,7 +169,7 @@ namespace RealmCommander.Network
             if (gameState == GameState.WaitingForPlayers)
             {
                 if (NetworkServer.connections == null) return;
-                playerCount = NetworkServer.connections.Count;
+                playerCount = CountCreatedPlayers();
 
                 bool allReady = true;
                 bool allPlayersCreated = playerCount > 0;
@@ -150,6 +178,7 @@ namespace RealmCommander.Network
                     if (conn.identity == null)
                     {
                         allPlayersCreated = false;
+                        allReady = false;
                         continue;
                     }
                     
@@ -183,7 +212,7 @@ namespace RealmCommander.Network
                 }
 
                 _autoStartTimer += Time.deltaTime;
-                if (_autoStartTimer >= autoStartDelay && playerCount >= minPlayers)
+                if (_autoStartTimer >= autoStartDelay && playerCount >= minPlayers && allPlayersCreated)
                 {
                     StartGame();
                 }
@@ -198,6 +227,16 @@ namespace RealmCommander.Network
                     CheckWinCondition();
                 }
             }
+        }
+
+        [Server]
+        private static int CountCreatedPlayers()
+        {
+            if (NetworkServer.connections == null) return 0;
+            int count = 0;
+            foreach (var connection in NetworkServer.connections.Values)
+                if (connection.identity != null) count++;
+            return count;
         }
 
         private float _winCheckTimer = 2f;
@@ -258,9 +297,10 @@ namespace RealmCommander.Network
         {
             if (gameState == GameState.Playing || gameState == GameState.GameOver) return;
             gameState = GameState.Playing;
+            syncedGameSpeed = 1f;
+            isGamePaused = false;
+            Time.timeScale = 1f;
             OnGameStarted?.Invoke();
-            if (GameManager.Instance != null)
-                GameManager.Instance.StartGame();
             Debug.Log("[Game] Game Started - State: Playing");
         }
 
@@ -323,6 +363,33 @@ namespace RealmCommander.Network
         private void OnGameStateChanged(GameState oldValue, GameState newValue)
         {
             OnStateChanged?.Invoke(newValue);
+        }
+
+        private void OnPauseChanged(bool oldValue, bool newValue)
+        {
+            if (!isServer)
+                Time.timeScale = newValue ? 0f : syncedGameSpeed;
+        }
+
+        private void OnSpeedChanged(float oldValue, float newValue)
+        {
+            if (!isServer && !isGamePaused)
+                Time.timeScale = newValue;
+        }
+
+        [Server]
+        public void ServerSetPaused(bool paused)
+        {
+            isGamePaused = paused;
+            Time.timeScale = paused ? 0f : syncedGameSpeed;
+        }
+
+        [Server]
+        public void ServerSetGameSpeed(float speed)
+        {
+            syncedGameSpeed = Mathf.Clamp(speed, 0.5f, 3f);
+            if (!isGamePaused)
+                Time.timeScale = syncedGameSpeed;
         }
 
         private void OnGUI()

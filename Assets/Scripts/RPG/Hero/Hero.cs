@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.AI;
 using Mirror;
+using RealmCommander.Core;
 
 namespace RealmCommander.RPG
 {
@@ -31,6 +33,13 @@ namespace RealmCommander.RPG
     }
 
     [Serializable]
+    public enum SkillEffectType
+    {
+        TargetDamage,
+        SelfHeal
+    }
+
+    [Serializable]
     public class SkillData
     {
         public string skillName;
@@ -39,6 +48,7 @@ namespace RealmCommander.RPG
         public float manaCost = 20f;
         public float damage = 50f;
         public float range = 5f;
+        public SkillEffectType effectType;
         public Sprite icon;
 
         [HideInInspector] public float currentCooldown;
@@ -48,6 +58,7 @@ namespace RealmCommander.RPG
     }
 
     [RequireComponent(typeof(NetworkIdentity))]
+    [RequireComponent(typeof(NavMeshAgent))]
     public class Hero : NetworkBehaviour
     {
         [Header("Hero Data")]
@@ -66,15 +77,26 @@ namespace RealmCommander.RPG
         private int syncLevel = 1;
         [SyncVar(hook = nameof(OnSyncExpChanged))]
         private float syncExp;
+        [SyncVar(hook = nameof(OnTeamChanged))]
+        private int teamId;
+        [SyncVar(hook = nameof(OnSkill0CooldownChanged))]
+        private float syncSkill0Cooldown;
+        [SyncVar(hook = nameof(OnSkill1CooldownChanged))]
+        private float syncSkill1Cooldown;
 
         private float lastAttackTime;
         private GameObject currentTarget;
         private bool isSelected;
+        private NavMeshAgent agent;
+        private bool isSubscribed;
 
         public HeroData Data => heroData;
         public bool IsAlive => heroData.currentHealth > 0;
         public bool IsSelected => isSelected;
-        public bool IsEnemy => gameObject.CompareTag("Enemy");
+        public bool IsEnemy => teamId == 1;
+        public int TeamId => teamId;
+        public bool CanIssueLocalCommands => !NetworkClient.active || isOwned || (NetworkServer.active && teamId == 0);
+        public GameObject CurrentTarget => currentTarget;
 
         public event Action<HeroData> OnStatsChanged;
         public event Action OnLevelUp;
@@ -83,6 +105,14 @@ namespace RealmCommander.RPG
         private void Awake()
         {
             heroData ??= new HeroData { heroName = gameObject.name };
+            EnsureDefaultSkills();
+            agent = GetComponent<NavMeshAgent>();
+            agent.speed = heroData.moveSpeed;
+            agent.acceleration = 24f;
+            agent.angularSpeed = 420f;
+            agent.stoppingDistance = 0.4f;
+            agent.radius = 0.35f;
+            agent.height = 1.2f;
 
             if (selectionIndicator != null)
             {
@@ -106,6 +136,7 @@ namespace RealmCommander.RPG
             syncMana = heroData.currentMana;
             syncLevel = heroData.level;
             syncExp = heroData.currentExp;
+            UpdateCooldownSync();
         }
 
         public override void OnStartClient()
@@ -115,11 +146,21 @@ namespace RealmCommander.RPG
             heroData.currentMana = syncMana;
             heroData.level = syncLevel;
             heroData.currentExp = syncExp;
+            ApplyTeamVisual();
+            SubscribeToCommands();
+        }
+
+        private void Start()
+        {
+            SubscribeToCommands();
         }
 
         private void Update()
         {
             if (!IsAlive) return;
+
+            if (!isSubscribed && CanIssueLocalCommands)
+                SubscribeToCommands();
 
             if (isServer)
                 RegenerateMana();
@@ -142,7 +183,8 @@ namespace RealmCommander.RPG
                 }
             }
 
-            UpdateSkillCooldowns();
+            if (isServer)
+                UpdateSkillCooldowns();
         }
 
         private void RegenerateMana()
@@ -168,11 +210,12 @@ namespace RealmCommander.RPG
                     if (skill.currentCooldown < 0) skill.currentCooldown = 0;
                 }
             }
+            UpdateCooldownSync();
         }
 
         public void SetSelected(bool selected)
         {
-            if (!isOwned) return;
+            if (!CanIssueLocalCommands) return;
             isSelected = selected;
             if (selectionIndicator != null)
             {
@@ -286,16 +329,21 @@ namespace RealmCommander.RPG
             syncMana = heroData.currentMana;
             skill.currentCooldown = skill.cooldown;
 
-            if (target != null)
+            if (skill.effectType == SkillEffectType.TargetDamage)
             {
                 var combat = Network.CombatManager.Instance;
-                if (combat != null)
+                if (combat != null && target != null)
                 {
                     combat.ApplySkillDamage(gameObject, target, skill.damage);
+                    GainExp(skill.damage * 0.5f);
                 }
-                GainExp(skill.damage * 0.5f);
+            }
+            else if (skill.effectType == SkillEffectType.SelfHeal)
+            {
+                Heal(skill.damage);
             }
 
+            UpdateCooldownSync();
             OnStatsChanged?.Invoke(heroData);
             RpcOnSkillCast(skillIndex);
         }
@@ -334,12 +382,139 @@ namespace RealmCommander.RPG
             var skill = heroData.skills[skillIndex];
             if (!skill.IsReady) return false;
             if (heroData.currentMana < skill.manaCost) return false;
-            if (target == null) return true;
+            if (skill.effectType == SkillEffectType.SelfHeal)
+                return target == null && heroData.currentHealth < heroData.maxHealth;
+            if (target == null) return false;
 
             var targetUnit = target.GetComponent<RTS.Unit>();
             if (targetUnit == null || !targetUnit.IsAlive) return false;
 
             return Vector3.Distance(transform.position, target.transform.position) <= skill.range;
+        }
+
+        [Server]
+        public void ConfigureTeam(int newTeamId)
+        {
+            teamId = Mathf.Clamp(newTeamId, 0, 1);
+            ApplyTeamVisual();
+        }
+
+        private void SubscribeToCommands()
+        {
+            if (isSubscribed || !CanIssueLocalCommands || CommandManager.Instance == null) return;
+            SelectionManager.Instance?.RegisterSelectableUnit(gameObject);
+            CommandManager.Instance.OnMoveCommand += HandleMoveCommand;
+            CommandManager.Instance.OnAttackCommand += HandleAttackCommand;
+            isSubscribed = true;
+        }
+
+        private void OnDestroy()
+        {
+            SelectionManager.Instance?.UnregisterSelectableUnit(gameObject);
+            if (CommandManager.Instance != null && isSubscribed)
+            {
+                CommandManager.Instance.OnMoveCommand -= HandleMoveCommand;
+                CommandManager.Instance.OnAttackCommand -= HandleAttackCommand;
+            }
+        }
+
+        private void HandleMoveCommand(Vector3 position)
+        {
+            if (!CanIssueLocalCommands || SelectionManager.Instance == null || !SelectionManager.Instance.IsUnitSelected(gameObject)) return;
+            currentTarget = null;
+            if (isServer || !NetworkClient.active)
+                ApplyMove(position);
+            else
+                CmdMove(position);
+        }
+
+        [Command]
+        private void CmdMove(Vector3 position)
+        {
+            ApplyMove(position);
+        }
+
+        [Server]
+        private void ApplyMove(Vector3 position)
+        {
+            if (agent == null || !agent.enabled) return;
+            if (!agent.isOnNavMesh && NavMesh.SamplePosition(transform.position, out NavMeshHit startHit, 5f, NavMesh.AllAreas))
+                agent.Warp(startHit.position);
+            if (agent.isOnNavMesh && NavMesh.SamplePosition(position, out NavMeshHit hit, 1.5f, agent.areaMask))
+            {
+                agent.isStopped = false;
+                agent.SetDestination(hit.position);
+            }
+        }
+
+        private void HandleAttackCommand(GameObject target)
+        {
+            if (!CanIssueLocalCommands || SelectionManager.Instance == null || !SelectionManager.Instance.IsUnitSelected(gameObject)) return;
+            if (isServer || !NetworkClient.active)
+                SetTarget(target);
+            else
+                CmdSetTarget(target);
+        }
+
+        [Command]
+        private void CmdSetTarget(GameObject target)
+        {
+            SetTarget(target);
+        }
+
+        private void EnsureDefaultSkills()
+        {
+            heroData.skills ??= new List<SkillData>();
+            if (heroData.skills.Count >= 2) return;
+            heroData.skills.Clear();
+            heroData.skills.Add(new SkillData
+            {
+                skillName = "Arc Strike",
+                description = "Deal server-authoritative damage to an enemy in range.",
+                cooldown = 5f,
+                manaCost = 25f,
+                damage = 55f,
+                range = 6f,
+                effectType = SkillEffectType.TargetDamage
+            });
+            heroData.skills.Add(new SkillData
+            {
+                skillName = "Rally Heal",
+                description = "Restore the hero's health.",
+                cooldown = 9f,
+                manaCost = 30f,
+                damage = 70f,
+                range = 0f,
+                effectType = SkillEffectType.SelfHeal
+            });
+        }
+
+        private void UpdateCooldownSync()
+        {
+            if (!isServer || heroData.skills.Count < 2) return;
+            syncSkill0Cooldown = heroData.skills[0].currentCooldown;
+            syncSkill1Cooldown = heroData.skills[1].currentCooldown;
+        }
+
+        private void OnSkill0CooldownChanged(float oldValue, float newValue)
+        {
+            if (heroData.skills.Count > 0) heroData.skills[0].currentCooldown = newValue;
+        }
+
+        private void OnSkill1CooldownChanged(float oldValue, float newValue)
+        {
+            if (heroData.skills.Count > 1) heroData.skills[1].currentCooldown = newValue;
+        }
+
+        private void OnTeamChanged(int oldValue, int newValue)
+        {
+            ApplyTeamVisual();
+        }
+
+        private void ApplyTeamVisual()
+        {
+            if (heroRenderer != null)
+                heroRenderer.material.color = teamId == 1 ? new Color(1f, 0.25f, 0.1f) : heroColor;
         }
 
         private void OnSyncHealthChanged(float oldValue, float newValue)
@@ -377,7 +552,7 @@ namespace RealmCommander.RPG
             RTS.Unit unit = target.GetComponent<RTS.Unit>();
             if (unit != null) return unit.IsAlive && unit.IsEnemy != IsEnemy;
             RTS.Building building = target.GetComponent<RTS.Building>();
-            return building != null && building.IsAlive && (building.TeamId == 1) != IsEnemy;
+            return building != null && building.IsAlive && building.TeamId == (IsEnemy ? 0 : 1);
         }
 
         private void Die()

@@ -1,4 +1,3 @@
-using System;
 using UnityEngine;
 using UnityEngine.AI;
 using UnityEngine.EventSystems;
@@ -8,6 +7,7 @@ namespace RealmCommander.RTS
 {
     public class CommandInput : MonoBehaviour
     {
+        [SerializeField] private Camera commandCamera;
         [SerializeField] private LayerMask groundLayer;
         [SerializeField] private LayerMask unitLayer;
         [SerializeField] private LayerMask buildingLayer;
@@ -16,19 +16,10 @@ namespace RealmCommander.RTS
 
         private void Awake()
         {
-            DontDestroyOnLoad(gameObject);
-
-            int g = groundLayer.value;
-            int u = unitLayer.value;
-            int b = buildingLayer.value;
-            combinedMask = (g | u | b) != 0 ? g | u | b : ~0;
-        }
-
-        private Camera GetCamera()
-        {
-            Camera cam = Camera.main;
-            if (cam == null) cam = FindFirstObjectByType<Camera>();
-            return cam;
+            commandCamera = ResolveCommandCamera(commandCamera);
+            combinedMask = groundLayer | unitLayer | buildingLayer;
+            if (combinedMask == 0)
+                combinedMask = Physics.DefaultRaycastLayers;
         }
 
         private void Update()
@@ -43,17 +34,18 @@ namespace RealmCommander.RTS
         private void HandleRightClick()
         {
             if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject()) return;
+            if (SelectionManager.Instance == null || SelectionManager.Instance.SelectedCount == 0) return;
 
-            Camera cam = GetCamera();
+            Camera cam = ResolveCommandCamera(commandCamera);
             if (cam == null) return;
-            Ray ray = cam.ScreenPointToRay(Input.mousePosition);
+            commandCamera = cam;
 
+            Ray ray = cam.ScreenPointToRay(Input.mousePosition);
             RaycastHit[] hits = Physics.RaycastAll(ray, 1000f, combinedMask);
             if (hits.Length == 0) return;
-            Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+            System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
 
             // Pass 1: Find the closest enemy unit among ALL hits.
-            // Enemies behind friendly units are still targetable.
             int firstEnemyIndex = -1;
             for (int i = 0; i < hits.Length; i++)
             {
@@ -94,23 +86,35 @@ namespace RealmCommander.RTS
             {
                 if (hits[i].collider.GetComponentInParent<Unit>() == null && hits[i].collider.GetComponentInParent<Building>() == null)
                 {
-                    if (NavMesh.SamplePosition(hits[i].point, out _, 1f, NavMesh.AllAreas))
+                    if (NavMesh.SamplePosition(hits[i].point, out NavMeshHit navHit, 1f, NavMesh.AllAreas))
                     {
-                        CommandManager.Instance?.IssueMoveCommand(hits[i].point);
+                        CommandManager.Instance?.IssueMoveCommand(navHit.position);
                         return;
                     }
                 }
             }
+        }
 
-            // Fallback: if no NavMesh hit found, use the first non-unit hit anyway
-            for (int i = 0; i < hits.Length; i++)
+        private static Camera ResolveCommandCamera(Camera preferred)
+        {
+            if (preferred != null && preferred.isActiveAndEnabled && !preferred.orthographic)
+                return preferred;
+
+            Camera main = Camera.main;
+            if (main != null && main.isActiveAndEnabled && !main.orthographic)
+                return main;
+
+            Camera[] cameras = FindObjectsByType<Camera>(FindObjectsSortMode.None);
+            Camera best = null;
+            for (int i = 0; i < cameras.Length; i++)
             {
-                if (hits[i].collider.GetComponentInParent<Unit>() == null && hits[i].collider.GetComponentInParent<Building>() == null)
-                {
-                    CommandManager.Instance?.IssueMoveCommand(hits[i].point);
-                    return;
-                }
+                Camera candidate = cameras[i];
+                if (!candidate.isActiveAndEnabled || candidate.orthographic) continue;
+                if (best == null || candidate.depth > best.depth)
+                    best = candidate;
             }
+
+            return best;
         }
     }
 }

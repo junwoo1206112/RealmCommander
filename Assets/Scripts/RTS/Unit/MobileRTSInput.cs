@@ -25,11 +25,25 @@ namespace RealmCommander.RTS
 
         private void Awake()
         {
-            if (mainCamera == null)
-                mainCamera = Camera.main;
-            if (mainCamera == null)
-                mainCamera = FindFirstObjectByType<Camera>();
+            if (mainCamera == null || mainCamera.orthographic)
+                mainCamera = ResolveGameplayCamera();
             EditorSimulationActive = simulateTouchInEditor && Application.isEditor;
+        }
+
+        private static Camera ResolveGameplayCamera()
+        {
+            Camera main = Camera.main;
+            if (main != null && main.isActiveAndEnabled && !main.orthographic)
+                return main;
+
+            Camera[] cameras = FindObjectsByType<Camera>(FindObjectsSortMode.None);
+            for (int i = 0; i < cameras.Length; i++)
+            {
+                if (cameras[i].isActiveAndEnabled && !cameras[i].orthographic)
+                    return cameras[i];
+            }
+
+            return null;
         }
 
         private void Update()

@@ -18,11 +18,6 @@ namespace RealmCommander.Network
                 Destroy(gameObject);
                 return;
             }
-
-            if (GetComponent<NetworkIdentity>() == null)
-            {
-                gameObject.AddComponent<NetworkIdentity>();
-            }
         }
 
         private void OnDestroy()
@@ -55,7 +50,7 @@ namespace RealmCommander.Network
 
             bool attackerIsEnemy = attackerUnit != null ? attackerUnit.IsEnemy : attackerHero.IsEnemy;
             bool targetIsEnemy = targetUnit != null ? targetUnit.IsEnemy
-                : (targetBuilding != null && targetBuilding.tag == "Enemy");
+                : (targetBuilding != null && targetBuilding.TeamId == 1);
 
             if (attackerIsEnemy == targetIsEnemy) return false;
 
@@ -94,7 +89,7 @@ namespace RealmCommander.Network
 
                 bool casterIsEnemy = casterUnit != null ? casterUnit.IsEnemy : (casterHero != null && casterHero.IsEnemy);
                 bool targetIsEnemy = targetUnit != null ? targetUnit.IsEnemy
-                    : (targetBuilding != null && targetBuilding.tag == "Enemy");
+                    : (targetBuilding != null && targetBuilding.TeamId == 1);
 
                 if (casterIsEnemy == targetIsEnemy) return;
             }

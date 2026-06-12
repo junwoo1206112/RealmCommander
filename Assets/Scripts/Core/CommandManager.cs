@@ -1,6 +1,7 @@
 using System;
 using UnityEngine;
 using UnityEngine.AI;
+using RealmCommander.RTS;
 
 namespace RealmCommander.Core
 {
@@ -33,10 +34,11 @@ namespace RealmCommander.Core
 
         public void IssueMoveCommand(Vector3 position)
         {
-            Vector3 final = position;
-            if (NavMesh.SamplePosition(position, out NavMeshHit hit, 2f, NavMesh.AllAreas))
-                final = hit.position;
-            OnMoveCommand?.Invoke(final);
+            if (SelectionManager.Instance == null || SelectionManager.Instance.SelectedCount == 0) return;
+            if (!TryResolveMoveDestination(position, out Vector3 destination)) return;
+
+            MoveMarker.Spawn(destination, false);
+            OnMoveCommand?.Invoke(destination);
         }
 
         public void IssueAttackCommand(GameObject target)
@@ -44,7 +46,20 @@ namespace RealmCommander.Core
             if (target != null)
             {
                 OnAttackCommand?.Invoke(target);
+                MoveMarker.Spawn(target.transform.position, true);
             }
+        }
+
+        private static bool TryResolveMoveDestination(Vector3 position, out Vector3 destination)
+        {
+            if (NavMesh.SamplePosition(position, out NavMeshHit hit, 1.5f, NavMesh.AllAreas))
+            {
+                destination = hit.position;
+                return true;
+            }
+
+            destination = default;
+            return false;
         }
 
         public void IssueBuildCommand(Vector3 position, int buildingType)
@@ -83,6 +98,9 @@ namespace RealmCommander.Core
                 RTS.Unit selectedUnit = selected != null ? selected.GetComponent<RTS.Unit>() : null;
                 if (selectedUnit != null)
                     return selectedUnit.IsEnemy != target.IsEnemy;
+                RPG.Hero selectedHero = selected != null ? selected.GetComponent<RPG.Hero>() : null;
+                if (selectedHero != null)
+                    return selectedHero.IsEnemy != target.IsEnemy;
             }
 
             return false;
@@ -97,7 +115,10 @@ namespace RealmCommander.Core
             {
                 RTS.Unit selectedUnit = selected != null ? selected.GetComponent<RTS.Unit>() : null;
                 if (selectedUnit != null)
-                    return (target.CompareTag("Enemy")) != selectedUnit.IsEnemy;
+                    return target.TeamId == (selectedUnit.IsEnemy ? 0 : 1);
+                RPG.Hero selectedHero = selected != null ? selected.GetComponent<RPG.Hero>() : null;
+                if (selectedHero != null)
+                    return target.TeamId != selectedHero.TeamId;
             }
 
             return false;

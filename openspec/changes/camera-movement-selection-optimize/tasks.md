@@ -1,0 +1,22 @@
+- [x] 카메라 피치 75도, 초기 높이 y=35로 변경
+- [x] 카메라 줌 범위 15~60으로 확장
+- [x] TrySetDestination NavMesh 샘플 반경 5f → 1.5f로 축소
+- [x] NavMesh 샘플 실패 시 원래 위치로 직접 이동하도록 fallback 추가
+- [x] ApplyMoveCommand에서 agent.isStopped=false 즉시 해제
+- [x] 자동 전투 탐지 lastCommandTime 1.5초 유예 적용
+- [x] AutoAcquireTarget을 이동 거리 1.2배 이내로 제한
+- [x] 포메이션 오프셋 NavMesh 샘플 제거 (중심점 이미 샘플됨)
+- [x] 좌클릭 드래그 선택을 유닛 중심점 기반으로 변경
+- [x] 시각적 선택 상자를 GUI.DrawTexture로 직접 렌더링
+- [x] MoveMarker 클래스 추가 (이동/공격 피드백)
+- [x] CommandManager에서 이동 명령 시 마커 생성
+- [x] CommandInput combinedMask를 ~0으로 변경 (모든 레이어)
+- [x] CommandInput에서 자동 Ground 생성 (콜라이더 없을 때)
+- [x] Unit.Start/OnStartClient에서 이벤트 구독 (소유권 변경 대응)
+- [x] CommandInput 씬 수명주기 유지로 중복 우클릭 명령 방지
+- [x] 화면 고정 CursorMarker 제거 및 월드 공간 원형 MoveMarker 단일화
+- [x] 핑 위치와 실제 이동 목적지를 동일한 NavMesh 보정 좌표로 통일
+- [x] UI 위 우클릭과 선택 유닛 없는 이동 명령 차단
+- [x] CommandInput과 MobileRTSInput의 gameplay camera 참조를 Main Camera로 통일
+- [x] MinimapCamera의 RTS 카메라 이동 컨트롤러 비활성화
+- [x] 이동 중심점의 중복 NavMesh 보정 반경을 1.5m로 제한

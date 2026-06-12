@@ -58,6 +58,10 @@ namespace RealmCommander.Network
             if (unitPrefab != null && !networkManager.spawnPrefabs.Contains(unitPrefab))
                 networkManager.spawnPrefabs.Add(unitPrefab);
 
+            GameObject heroPrefab = Resources.Load<GameObject>("CommanderHero");
+            if (heroPrefab != null && !networkManager.spawnPrefabs.Contains(heroPrefab))
+                networkManager.spawnPrefabs.Add(heroPrefab);
+
             Debug.Log("[NetworkBootstrap] Network prefabs configured");
         }
     }

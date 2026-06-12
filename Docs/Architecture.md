@@ -193,11 +193,14 @@ public class Unit : MonoBehaviour
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### 3.3 RPG 시스템
+### 3.3 RPG 시스템 (Prototype)
+
+> **참고:** Inventory와 Quest 시스템은 현재 Prototype 상태입니다.
+> 저장, 드롭, 상점, 실제 경제 루프가 없으며 1v1 gameplay loop와 연결되지 않았습니다.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                         Inventory                            │
+│                 Inventory (Prototype)                        │
 ├─────────────────────────────────────────────────────────────┤
 │ - items: List<InventorySlot>                                 │
 │ - equipment: InventorySlot[]                                 │
@@ -210,7 +213,7 @@ public class Unit : MonoBehaviour
 └─────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
-│                       QuestManager                           │
+│               QuestManager (Prototype)                       │
 ├─────────────────────────────────────────────────────────────┤
 │ - availableQuests: List<QuestData>                           │
 │ - activeQuests: List<QuestData>                              │

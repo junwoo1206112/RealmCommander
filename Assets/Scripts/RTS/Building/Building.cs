@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using Mirror;
@@ -26,6 +27,7 @@ namespace RealmCommander.RTS
         [SerializeField] private Renderer buildingRenderer;
         [SerializeField] private Color buildingColor = Color.gray;
         [SerializeField] private Color selectedColor = Color.cyan;
+        private MaterialPropertyBlock colorBlock;
 
         [SyncVar(hook = nameof(OnHealthChanged))]
         private float currentHealth;
@@ -266,6 +268,7 @@ namespace RealmCommander.RTS
 
         private void ProduceUnit(UnitProductionData data)
         {
+            if (!IsAlive) return;
             if (data.unitPrefab == null)
             {
                 Debug.LogError("Unit Prefab이 설정되지 않았습니다!");
@@ -332,35 +335,42 @@ namespace RealmCommander.RTS
                 SelectionManager.Instance?.UnregisterSelectableUnit(gameObject);
             }
 
-            if (buildingRenderer != null)
-            {
-                buildingRenderer.material.color = Color.black;
-            }
+            ApplyBuildingColor(Color.black);
 
             if (isServer)
             {
                 RpcOnDestroyed();
-                NetworkServer.Destroy(gameObject);
+                StartCoroutine(DestroyAfterFrame());
             }
 
             Debug.Log($"{buildingName} 파괴됨!");
         }
 
+        private System.Collections.IEnumerator DestroyAfterFrame()
+        {
+            yield return null;
+            if (gameObject != null)
+                NetworkServer.Destroy(gameObject);
+        }
+
         [ClientRpc]
         private void RpcOnDestroyed()
         {
-            if (buildingRenderer != null)
-            {
-                buildingRenderer.material.color = Color.black;
-            }
+            ApplyBuildingColor(Color.black);
+        }
+
+        private void ApplyBuildingColor(Color color)
+        {
+            if (buildingRenderer == null) return;
+            if (colorBlock == null)
+                colorBlock = new MaterialPropertyBlock();
+            colorBlock.SetColor("_Color", color);
+            buildingRenderer.SetPropertyBlock(colorBlock);
         }
 
         private void UpdateBuildingColor()
         {
-            if (buildingRenderer != null)
-            {
-                buildingRenderer.material.color = teamId == 1 ? Color.red : buildingColor;
-            }
+            ApplyBuildingColor(teamId == 1 ? Color.red : buildingColor);
         }
 
         [Server]

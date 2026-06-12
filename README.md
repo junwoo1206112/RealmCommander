@@ -15,6 +15,7 @@ Unity 6와 Mirror로 제작한 서버 권한형 모바일 RTS 포트폴리오입
 - 모바일 두 손가락 카메라, Safe Area, 가로 화면 대응
 - NavMesh 이동, 적 AI, CSV 기반 유닛·건물·스킬 데이터
 - 연결 주소와 상태를 표시하는 Host/Client 로비
+- 팀당 Commander Hero 1기와 서버 권한 스킬 2개: `Arc Strike`, `Rally Heal`
 
 ## 실제 검증 결과
 
@@ -51,7 +52,7 @@ Windows 빌드는 Unity 메뉴 `Tools > Realm Commander > Build Windows Portfoli
 |---|---|
 | Engine | Unity 6, C# |
 | Network | Mirror, Telepathy TCP, Server Authority |
-| Gameplay | Unit, Building, CombatManager, NetworkGameManager |
+| Gameplay | Unit, Building, Commander Hero, CombatManager, NetworkGameManager |
 | Movement | NavMeshAgent, NetworkTransformReliable |
 | Input/UI | PC RTS 입력, Mobile RTS 입력, UGUI |
 | Data | CSV + Resources, SpecManager |
@@ -61,7 +62,9 @@ Windows 빌드는 Unity 메뉴 `Tools > Realm Commander > Build Windows Portfoli
 
 ## 범위와 남은 한계
 
-- RPG의 Hero, Inventory, Quest, Skill 코드는 프로토타입 모듈이며 현재 핵심 1v1 완료 기능으로 주장하지 않습니다.
+- RPG 범위는 팀당 Commander Hero 1기와 `Arc Strike`/`Rally Heal` 2개 스킬까지만 완료 기능으로 제한합니다.
+- Inventory는 저장, 드롭, 상점 경제와 연결되지 않은 `Prototype`입니다.
+- Quest는 핵심 1v1 루프 및 저장과 연결되지 않은 `Prototype`입니다.
 - 경쟁형 자원은 팀별로 분리됐지만, 원격 Client의 신규 건물 배치는 아직 지원하지 않으며 UI에서 명시적으로 차단합니다.
 - 실제 외부 장비 테스트, 공인 WAN/NAT 통과, 자동 EditMode/PlayMode 테스트는 후속 검증 항목입니다.
 - 포트폴리오 제출 전 대표 스크린샷과 60~90초 플레이 영상을 추가해야 합니다.

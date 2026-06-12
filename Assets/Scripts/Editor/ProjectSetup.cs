@@ -42,7 +42,7 @@ namespace RealmCommander.Editor
             // Ground 생성
             GameObject ground = GameObject.CreatePrimitive(PrimitiveType.Plane);
             ground.name = "Ground";
-            ground.transform.localScale = new Vector3(10, 1, 10);
+            ground.transform.localScale = new Vector3(20, 1, 20);
             ground.isStatic = true;
 
             // 머티리얼 인스턴스 생성하여 색상 적용 (URP 호환)
@@ -249,11 +249,11 @@ namespace RealmCommander.Editor
                 camObj.AddComponent<AudioListener>();
             }
 
-            mainCam.transform.position = new Vector3(0, 10, -8);
-            mainCam.transform.rotation = Quaternion.Euler(45, 0, 0);
+            mainCam.transform.position = new Vector3(0, 35, -8);
+            mainCam.transform.rotation = Quaternion.Euler(75, 0, 0);
             mainCam.backgroundColor = new Color(0.1f, 0.15f, 0.2f);
             mainCam.orthographic = false;
-            mainCam.fieldOfView = 50f;
+            mainCam.fieldOfView = 55f;
             if (mainCam.GetComponent<MobileRTSCameraController>() == null)
             {
                 mainCam.gameObject.AddComponent<MobileRTSCameraController>();

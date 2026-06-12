@@ -18,7 +18,7 @@ namespace RealmCommander.Editor
                 "프로젝트 전체 설정을 완료하시겠습니까?\n\n" +
                 "1. MainMenuScene 생성\n" +
                 "2. LobbyScene 생성\n" +
-                "3. MainScene 유닛 렌더러 수정\n" +
+                "3. MainScene 카메라 컨트롤러 추가\n" +
                 "4. CommandInput/BoxSelector 추가\n" +
                 "5. NetworkManagerHUD 추가",
                 "실행", "취소"))
@@ -28,20 +28,23 @@ namespace RealmCommander.Editor
 
             CreateMainMenuScene();
             CreateLobbyScene();
-            FixUnitRenderers();
+            FixMainSceneCamera();
             AddInputControllers();
             AddNetworkManagerHUD();
 
-            EditorSceneManager.SaveOpenScenes();
             AssetDatabase.Refresh();
 
             EditorUtility.DisplayDialog("Complete!",
-                "모든 설정이 완료되었습니다!", "확인");
+                "모든 설정이 완료되었습니다!\n\n" +
+                "카메라 조작법:\n" +
+                "  WASD: 이동\n" +
+                "  Q/E: 시점 회전\n" +
+                "  마우스 휠: 줌", "확인");
         }
 
         private static void CreateMainMenuScene()
         {
-            Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Additive);
+            Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             scene.name = "MainMenuScene";
 
             GameObject canvas = new GameObject("Canvas");
@@ -54,21 +57,25 @@ namespace RealmCommander.Editor
 
             // Start Button
             GameObject startBtn = CreateButton(canvas.transform, "StartButton", "Start Game", new Color(0.2f, 0.6f, 0.2f), new Vector2(0.5f, 0.4f), new Vector2(200, 50));
-            startBtn.GetComponent<Button>().onClick.AddListener(() => SceneManager.LoadScene("LobbyScene"));
 
             // Quit Button
             GameObject quitBtn = CreateButton(canvas.transform, "QuitButton", "Quit", new Color(0.6f, 0.2f, 0.2f), new Vector2(0.5f, 0.3f), new Vector2(200, 50));
-            quitBtn.GetComponent<Button>().onClick.AddListener(() => Application.Quit());
 
             CreateCameraAndEventSystem();
 
+            // Add MainMenuUI and wire buttons
+            var mainMenuUI = canvas.AddComponent<RealmCommander.UI.MainMenuUI>();
+            var so = new SerializedObject(mainMenuUI);
+            so.FindProperty("startGameButton").objectReferenceValue = startBtn.GetComponent<Button>();
+            so.FindProperty("quitButton").objectReferenceValue = quitBtn.GetComponent<Button>();
+            so.ApplyModifiedPropertiesWithoutUndo();
+
             EditorSceneManager.SaveScene(scene, "Assets/Scenes/MainMenuScene.unity");
-            EditorSceneManager.CloseScene(scene, true);
         }
 
         private static void CreateLobbyScene()
         {
-            Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Additive);
+            Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             scene.name = "LobbyScene";
 
             GameObject canvas = new GameObject("Canvas");
@@ -79,21 +86,20 @@ namespace RealmCommander.Editor
             CreateText(canvas.transform, "Title", "Game Lobby", 36, new Vector2(0.5f, 0.8f), new Vector2(300, 100));
 
             GameObject hostBtn = CreateButton(canvas.transform, "HostButton", "Host Game", new Color(0.2f, 0.4f, 0.8f), new Vector2(0.5f, 0.6f), new Vector2(200, 50));
-            hostBtn.GetComponent<Button>().onClick.AddListener(() => {
-                var nm = NetworkManager.singleton;
-                if (nm != null) { nm.StartHost(); SceneManager.LoadScene("MainScene"); }
-            });
-
             GameObject joinBtn = CreateButton(canvas.transform, "JoinButton", "Join Game", new Color(0.2f, 0.6f, 0.4f), new Vector2(0.5f, 0.5f), new Vector2(200, 50));
-            joinBtn.GetComponent<Button>().onClick.AddListener(() => {
-                var nm = NetworkManager.singleton;
-                if (nm != null) { nm.StartClient(); SceneManager.LoadScene("MainScene"); }
-            });
+            GameObject backBtn = CreateButton(canvas.transform, "BackButton", "Back", new Color(0.5f, 0.5f, 0.5f), new Vector2(0.5f, 0.4f), new Vector2(200, 50));
 
             CreateCameraAndEventSystem();
 
+            // Add LobbyUI and wire buttons
+            var lobbyUI = canvas.AddComponent<RealmCommander.UI.LobbyUI>();
+            var so = new SerializedObject(lobbyUI);
+            so.FindProperty("hostButton").objectReferenceValue = hostBtn.GetComponent<Button>();
+            so.FindProperty("joinButton").objectReferenceValue = joinBtn.GetComponent<Button>();
+            so.FindProperty("backButton").objectReferenceValue = backBtn.GetComponent<Button>();
+            so.ApplyModifiedPropertiesWithoutUndo();
+
             EditorSceneManager.SaveScene(scene, "Assets/Scenes/LobbyScene.unity");
-            EditorSceneManager.CloseScene(scene, true);
         }
 
         private static GameObject CreateText(Transform parent, string name, string text, int fontSize, Vector2 anchor, Vector2 size)
@@ -132,8 +138,10 @@ namespace RealmCommander.Editor
         private static void CreateCameraAndEventSystem()
         {
             GameObject camera = new GameObject("Main Camera");
-            camera.AddComponent<Camera>();
+            Camera cam = camera.AddComponent<Camera>();
+            cam.tag = "MainCamera";
             camera.AddComponent<AudioListener>();
+            camera.AddComponent<RealmCommander.RTS.MobileRTSCameraController>();
 
             GameObject eventSystem = new GameObject("EventSystem");
             eventSystem.AddComponent<UnityEngine.EventSystems.EventSystem>();
@@ -178,6 +186,41 @@ namespace RealmCommander.Editor
             var nm = Object.FindFirstObjectByType<NetworkManager>();
             if (nm != null && nm.GetComponent<NetworkManagerHUD>() == null)
                 nm.gameObject.AddComponent<NetworkManagerHUD>();
+        }
+
+        private static void FixMainSceneCamera()
+        {
+            string mainScenePath = "Assets/Scenes/MainScene.unity";
+            if (!System.IO.File.Exists(mainScenePath))
+            {
+                Debug.LogWarning("[Setup] MainScene.unity not found, skipping camera fix");
+                return;
+            }
+
+            var scene = EditorSceneManager.OpenScene(mainScenePath, OpenSceneMode.Single);
+
+            Camera cam = Camera.main;
+            if (cam == null)
+            {
+                var camObj = GameObject.Find("Main Camera");
+                if (camObj != null) cam = camObj.GetComponent<Camera>();
+            }
+            if (cam == null)
+            {
+                var camObj = new GameObject("Main Camera");
+                cam = camObj.AddComponent<Camera>();
+                cam.tag = "MainCamera";
+                camObj.AddComponent<AudioListener>();
+                Debug.Log("[Setup] Main Camera created in MainScene");
+            }
+
+            if (cam.GetComponent<RealmCommander.RTS.MobileRTSCameraController>() == null)
+            {
+                cam.gameObject.AddComponent<RealmCommander.RTS.MobileRTSCameraController>();
+                Debug.Log("[Setup] MobileRTSCameraController added to MainScene camera");
+            }
+
+            EditorSceneManager.SaveScene(scene);
         }
     }
 }

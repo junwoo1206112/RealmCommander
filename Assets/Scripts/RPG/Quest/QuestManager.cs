@@ -83,8 +83,10 @@ namespace RealmCommander.RPG
         UseSkill
     }
 
+    [AddComponentMenu("Realm Commander/Prototype/Quest Manager")]
     public class QuestManager : MonoBehaviour
     {
+        public const string ScopeLabel = "Prototype - not part of the verified 1v1 gameplay loop";
         public static QuestManager Instance { get; private set; }
 
         [Header("Quest Settings")]

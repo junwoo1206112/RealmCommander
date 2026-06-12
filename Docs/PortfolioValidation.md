@@ -26,6 +26,26 @@
 
 ## 결과
 
+### 2026년 6월 12일 Phase 2 회귀 검증
+
+최근 카메라, 우클릭 좌표, NavMesh 이동 수정이 반영된 Windows Development Build를 loopback 두 프로세스로 재검증했습니다.
+
+```text
+[PortfolioBuild] PASS size=159414087
+RESOURCE_ISOLATION_PASS teams=0,1
+CLIENT_PASS team=1 ownedUnit=11 movementRoundTrip=ok targetError=0.00
+HOST_RECEIVED_CLIENT_PASS netId=11
+HOST_PASS players=2 teams=0,1 ownership=ok remoteMoveNetId=11 moved=4.47 targetError=0.00 replicationError=0.00
+```
+
+결과: PASS
+
+근거 로그:
+
+- `Logs/Phase2Build.log`
+- `Logs/Phase2Host.log`
+- `Logs/Phase2Client.log`
+
 ### LAN 주소
 
 ```text
@@ -76,6 +96,34 @@ Client:
 Builds\Windows\RealmCommander.exe -batchmode --rc-smoke-client --rc-address=HOST_IP --rc-timeout=60 -logFile Logs\MultiplayerClient.log
 ```
 
+### 최종 포트폴리오 검증 (2026-06-12)
+
+최신 Windows Development Build의 독립 Host/Client 두 프로세스 검증이 완료됐습니다.
+
+```text
+[PortfolioBuild] PASS size=159428598
+RESOURCE_ISOLATION_PASS teams=0,1
+HERO_SKILLS_PASS heroes=2 arcDamage=55.0 heal=70.0
+HOST_MOVE_PASS targetError=0.28
+CLIENT_PASS team=1 movementRoundTrip=ok targetError=0.27
+HOST_PASS players=2 teams=0,1 ownership=ok targetError=0.26 replicationError=0.00
+```
+
+결과: PASS
+
+검증 항목:
+- 빌드 크기: 159,428,598 bytes
+- 리소스 격리: 팀 0/1 자원 분리 확인
+- 영웅 스킬: Arc Strike 데미지 55.0, Rally Heal 회복 70.0
+- Host 이동: 목표 오차 0.28m
+- Client 이동: 목표 오차 0.27m
+- 네트워크 복제 오차: 0.00m
+
+근거 로그:
+- `Logs/FinalPortfolioBuild.log`
+- `Logs/FinalHost.log`
+- `Logs/FinalClient.log`
+
 ## 판정 한계
 
 - 두 개의 독립 Windows Player 프로세스로 검증했습니다.
@@ -83,3 +131,4 @@ Builds\Windows\RealmCommander.exe -batchmode --rc-smoke-client --rc-address=HOST
 - 원격 Client 신규 건물 배치는 현재 지원 범위 밖이며 UI에서 차단됩니다.
 - 공인 인터넷 접속은 방화벽, 공유기 NAT, 포트포워딩 환경에 따라 달라집니다.
 - 종료 시 Host transport thread의 소켓 취소 예외가 한 번 기록될 수 있습니다. 이는 `Application.Quit`에 따른 정상 종료 과정이며 smoke FAIL이나 컴파일 오류는 아닙니다.
+- SkillBar UI 연결은 Editor 스크립트로 설정해야 하며, 런타임에서 수동 검증이 필요합니다.

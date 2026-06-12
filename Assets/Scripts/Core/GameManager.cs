@@ -53,7 +53,10 @@ namespace RealmCommander.Core
         {
             if (NetworkClient.active && !NetworkServer.active) return;
             IsPaused = true;
-            Time.timeScale = 0f;
+            if (Network.NetworkGameManager.Instance != null)
+                Network.NetworkGameManager.Instance.ServerSetPaused(true);
+            else
+                Time.timeScale = 0f;
             OnGamePaused?.Invoke();
         }
 
@@ -61,7 +64,10 @@ namespace RealmCommander.Core
         {
             if (NetworkClient.active && !NetworkServer.active) return;
             IsPaused = false;
-            Time.timeScale = gameSpeed;
+            if (Network.NetworkGameManager.Instance != null)
+                Network.NetworkGameManager.Instance.ServerSetPaused(false);
+            else
+                Time.timeScale = gameSpeed;
             OnGameResumed?.Invoke();
         }
 
@@ -71,7 +77,10 @@ namespace RealmCommander.Core
             gameSpeed = Mathf.Clamp(speed, 0.5f, 3f);
             if (!IsPaused)
             {
-                Time.timeScale = gameSpeed;
+                if (Network.NetworkGameManager.Instance != null)
+                    Network.NetworkGameManager.Instance.ServerSetGameSpeed(gameSpeed);
+                else
+                    Time.timeScale = gameSpeed;
             }
         }
     }

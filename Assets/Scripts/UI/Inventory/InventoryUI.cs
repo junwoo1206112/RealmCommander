@@ -5,6 +5,7 @@ using RealmCommander.RPG;
 
 namespace RealmCommander.UI
 {
+    [AddComponentMenu("Realm Commander/Prototype/Inventory UI")]
     public class InventoryUI : MonoBehaviour
     {
         [Header("References")]
@@ -19,6 +20,8 @@ namespace RealmCommander.UI
 
         private void Start()
         {
+            if (!gameObject.name.Contains("Prototype"))
+                gameObject.name += " (Prototype)";
             if (inventory != null)
             {
                 inventory.OnInventoryChanged += RefreshUI;

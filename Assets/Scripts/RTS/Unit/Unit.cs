@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using UnityEngine;
 using UnityEngine.AI;
 using Mirror;
@@ -56,12 +57,15 @@ namespace RealmCommander.RTS
             if (agent != null)
             {
                 agent.speed = moveSpeed;
-                agent.stoppingDistance = Mathf.Min(attackRange * 0.5f, 0.5f);
-                agent.acceleration = 16f;
-                agent.angularSpeed = 480f;
+                agent.stoppingDistance = Mathf.Max(attackRange * 0.4f, 0.5f);
+                agent.acceleration = 30f;
+                agent.angularSpeed = 400f;
                 agent.autoBraking = false;
-                agent.obstacleAvoidanceType = ObstacleAvoidanceType.HighQualityObstacleAvoidance;
-                agent.avoidancePriority = 0;
+                agent.obstacleAvoidanceType = ObstacleAvoidanceType.LowQualityObstacleAvoidance;
+                agent.avoidancePriority = isEnemy ? 50 : 10;
+                agent.radius = 0.25f;
+                agent.height = 0.8f;
+                agent.autoRepath = true;
             }
 
             currentHealth = maxHealth;
@@ -86,7 +90,11 @@ namespace RealmCommander.RTS
             {
                 agent.enabled = true;
                 agent.speed = moveSpeed;
-                agent.avoidancePriority = isEnemy ? 50 : 0;
+                agent.acceleration = 30f;
+                agent.angularSpeed = 400f;
+                agent.autoBraking = false;
+                agent.stoppingDistance = Mathf.Max(attackRange * 0.4f, 0.5f);
+                agent.avoidancePriority = isEnemy ? 50 : 10;
             }
         }
 
@@ -95,20 +103,29 @@ namespace RealmCommander.RTS
             base.OnStartClient();
             if (!isServer && agent != null)
                 agent.enabled = false;
+
+            SubscribeToCommands();
         }
 
         private void Start()
         {
-            if (CanIssueLocalCommands)
-            {
-                SelectionManager.Instance?.RegisterSelectableUnit(gameObject);
-                if (CommandManager.Instance != null)
-                {
-                    CommandManager.Instance.OnMoveCommand += HandleMoveCommand;
-                    CommandManager.Instance.OnAttackCommand += HandleAttackCommand;
-                }
-            }
+            SubscribeToCommands();
+        }
 
+        private bool isSubscribed;
+
+        private void SubscribeToCommands()
+        {
+            if (isSubscribed) return;
+            if (!CanIssueLocalCommands) return;
+
+            SelectionManager.Instance?.RegisterSelectableUnit(gameObject);
+            if (CommandManager.Instance != null)
+            {
+                CommandManager.Instance.OnMoveCommand += HandleMoveCommand;
+                CommandManager.Instance.OnAttackCommand += HandleAttackCommand;
+                isSubscribed = true;
+            }
         }
 
         private void OnDestroy()
@@ -118,7 +135,7 @@ namespace RealmCommander.RTS
                 SelectionManager.Instance?.UnregisterSelectableUnit(gameObject);
             }
 
-            if (CommandManager.Instance != null)
+            if (CommandManager.Instance != null && isSubscribed)
             {
                 CommandManager.Instance.OnMoveCommand -= HandleMoveCommand;
                 CommandManager.Instance.OnAttackCommand -= HandleAttackCommand;
@@ -128,17 +145,18 @@ namespace RealmCommander.RTS
         private float lastAcquireTime;
         private float lastCommandTime;
         private float lastPathTime;
-        private static readonly float AcquireInterval = 0.5f;
+        private static readonly float AcquireInterval = 0.3f;
         private static readonly float AcquireMoveGrace = 1.5f;
-        private static readonly float DetectRangeMultiplier = 2.5f;
-        private static readonly float MinPathInterval = 0.15f;
         private Collider[] acquireBuffer = new Collider[32];
-        private Collider[] pushBuffer = new Collider[8];
 
         private void Update()
         {
             if (!IsAlive) return;
-            if (NetworkClient.active && !isServer) return;
+
+            if (!isSubscribed && CanIssueLocalCommands)
+            {
+                SubscribeToCommands();
+            }
 
             if (currentTarget != null)
             {
@@ -148,16 +166,17 @@ namespace RealmCommander.RTS
 
                     if (distance <= attackRange)
                     {
-                        agent.obstacleAvoidanceType = ObstacleAvoidanceType.NoObstacleAvoidance;
                         agent.isStopped = true;
+                        Vector3 lookDir = currentTarget.transform.position - transform.position;
+                        lookDir.y = 0;
+                        if (lookDir.sqrMagnitude > 0.01f)
+                            transform.rotation = Quaternion.LookRotation(lookDir);
                         TryAttack();
                     }
                     else
                     {
-                        agent.obstacleAvoidanceType = ObstacleAvoidanceType.HighQualityObstacleAvoidance;
-                        bool wasStopped = agent.isStopped;
                         agent.isStopped = false;
-                        if (wasStopped || (Time.time - lastPathTime >= MinPathInterval && (!agent.hasPath || agent.remainingDistance < 0.5f || Vector3.Distance(agent.destination, currentTarget.transform.position) > 1f)))
+                        if (Time.time - lastPathTime >= 0.3f)
                         {
                             lastPathTime = Time.time;
                             TrySetDestination(currentTarget.transform.position);
@@ -171,35 +190,9 @@ namespace RealmCommander.RTS
             }
             else
             {
-                AutoAcquireTarget();
-            }
-
-            PushNearbyUnits();
-        }
-
-        private void PushNearbyUnits()
-        {
-            if (agent == null || !agent.enabled || !agent.isOnNavMesh) return;
-
-            float pushRadius = agent.radius * 2f;
-            int hitCount = Physics.OverlapSphereNonAlloc(transform.position, pushRadius, pushBuffer);
-            for (int i = 0; i < hitCount; i++)
-            {
-                if (pushBuffer[i].gameObject == gameObject) continue;
-
-                Unit other = pushBuffer[i].GetComponent<Unit>();
-                if (other == null || !other.IsAlive) continue;
-
-                Vector3 away = transform.position - pushBuffer[i].transform.position;
-                away.y = 0f;
-                float dist = away.magnitude;
-                float otherRadius = other.agent != null ? other.agent.radius : agent.radius;
-                float minDist = agent.radius + otherRadius;
-
-                if (dist < minDist && dist > 0.001f)
+                if (Time.time - lastCommandTime >= AcquireMoveGrace)
                 {
-                    float pushAmount = (minDist - dist) * 0.5f;
-                    agent.Move(away.normalized * pushAmount);
+                    AutoAcquireTarget();
                 }
             }
         }
@@ -209,11 +202,10 @@ namespace RealmCommander.RTS
             if (Time.time - lastAcquireTime < AcquireInterval) return;
             lastAcquireTime = Time.time;
 
-            if (Time.time - lastCommandTime < AcquireMoveGrace) return;
-            if (agent.pathPending) return;
-            if (agent.hasPath && agent.remainingDistance > attackRange && agent.remainingDistance < float.MaxValue) return;
+            if (agent != null && agent.hasPath && agent.remainingDistance > attackRange)
+                return;
 
-            float detectRange = attackRange * DetectRangeMultiplier;
+            float detectRange = attackRange * 1.5f;
 
             int hitCount = Physics.OverlapSphereNonAlloc(transform.position, detectRange, acquireBuffer);
             GameObject nearest = null;
@@ -234,10 +226,9 @@ namespace RealmCommander.RTS
                 }
             }
 
-            if (nearest != null)
+            if (nearest != null && nearestDist <= attackRange)
             {
                 currentTarget = nearest;
-                TrySetDestination(nearest.transform.position);
             }
         }
 
@@ -331,8 +322,15 @@ namespace RealmCommander.RTS
             if (isServer)
             {
                 RpcOnDeath();
-                NetworkServer.Destroy(gameObject);
+                StartCoroutine(DestroyAfterFrame());
             }
+        }
+
+        private System.Collections.IEnumerator DestroyAfterFrame()
+        {
+            yield return null;
+            if (gameObject != null)
+                NetworkServer.Destroy(gameObject);
         }
 
         [ClientRpc]
@@ -343,8 +341,15 @@ namespace RealmCommander.RTS
 
         private void HandleMoveCommand(Vector3 position)
         {
-            if (!CanIssueLocalCommands) return;
-            if (SelectionManager.Instance == null || !SelectionManager.Instance.IsUnitSelected(gameObject)) return;
+            if (!CanIssueLocalCommands)
+            {
+                Debug.LogWarning($"[Unit] {name} HandleMoveCommand blocked: CanIssueLocalCommands=false");
+                return;
+            }
+            if (SelectionManager.Instance == null || !SelectionManager.Instance.IsUnitSelected(gameObject))
+            {
+                return;
+            }
 
             RequestMove(position);
         }
@@ -355,7 +360,7 @@ namespace RealmCommander.RTS
 
             Vector3 destination = GetFormationDestination(position);
 
-            if (isServer || !NetworkClient.active)
+            if (!NetworkClient.active || isServer)
                 ApplyMoveCommand(destination);
             else
                 CmdMove(destination);
@@ -369,10 +374,7 @@ namespace RealmCommander.RTS
 
         private void ApplyMoveCommand(Vector3 position)
         {
-            if (currentTarget != null)
-            {
-                currentTarget = null;
-            }
+            currentTarget = null;
             lastCommandTime = Time.time;
             TrySetDestination(position);
         }
@@ -384,7 +386,7 @@ namespace RealmCommander.RTS
 
             lastCommandTime = Time.time;
 
-            if (isServer || !NetworkClient.active)
+            if (!NetworkClient.active || isServer)
                 ApplyAttackCommand(target);
             else
                 CmdSetTarget(target);
@@ -417,35 +419,31 @@ namespace RealmCommander.RTS
         public void ClearTarget()
         {
             currentTarget = null;
-            if (agent != null && agent.enabled)
-            {
-                agent.isStopped = true;
-                agent.ResetPath();
-            }
+            agent.isStopped = false;
         }
 
         private bool TrySetDestination(Vector3 destination)
         {
             if (agent == null) return false;
             if (!agent.enabled) return false;
+
             if (!agent.isOnNavMesh)
             {
-                Debug.LogWarning($"[Unit] {name} not on NavMesh, can't move", this);
-                return false;
+                if (NavMesh.SamplePosition(transform.position, out NavMeshHit snapHit, 5f, NavMesh.AllAreas))
+                {
+                    agent.Warp(snapHit.position);
+                }
+                else
+                {
+                    return false;
+                }
             }
 
-            if (!NavMesh.SamplePosition(destination, out NavMeshHit hit, 2f, agent.areaMask))
-            {
-                Debug.LogWarning($"[Unit] {name} could not find NavMesh near {destination}", this);
+            if (!NavMesh.SamplePosition(destination, out NavMeshHit destinationHit, 1.5f, agent.areaMask))
                 return false;
-            }
 
-            agent.obstacleAvoidanceType = ObstacleAvoidanceType.HighQualityObstacleAvoidance;
             agent.isStopped = false;
-            bool success = agent.SetDestination(hit.position);
-            if (!success)
-                Debug.LogWarning($"[Unit] {name} SetDestination failed to {hit.position}", this);
-            return success;
+            return agent.SetDestination(destinationHit.position);
         }
 
         private Vector3 GetFormationDestination(Vector3 center)
@@ -458,24 +456,26 @@ namespace RealmCommander.RTS
             int index = selection.GetUnitIndex(gameObject);
             if (index < 0) return center;
 
-            bool centerOnNavMesh = NavMesh.SamplePosition(center, out _, agent != null ? Mathf.Max(agent.radius, 1f) : 1f, agent != null ? agent.areaMask : NavMesh.AllAreas);
-            if (!centerOnNavMesh)
-                return center;
+            float spacing = 1.2f;
 
-            int columns = Mathf.CeilToInt(Mathf.Sqrt(count));
-            int rows = Mathf.CeilToInt(count / (float)columns);
-            float spacing = Mathf.Max(1.25f, agent != null ? agent.radius * 2.5f : 1.25f);
-
-            float totalWidth = (columns - 1) * spacing;
-            float totalDepth = (rows - 1) * spacing;
-            float maxFormation = 12f;
-            float scale = 1f;
-            if (totalWidth > maxFormation || totalDepth > maxFormation)
-                scale = maxFormation / Mathf.Max(totalWidth, totalDepth);
-
-            float x = (index % columns - (columns - 1) * 0.5f) * spacing * scale;
-            float z = (index / columns - (rows - 1) * 0.5f) * spacing * scale;
-            return center + new Vector3(x, 0f, z);
+            if (count <= 3)
+            {
+                float angle = (index * 120f) * Mathf.Deg2Rad;
+                float r = spacing * 0.5f;
+                return center + new Vector3(Mathf.Cos(angle) * r, 0f, Mathf.Sin(angle) * r);
+            }
+            else if (count <= 6)
+            {
+                float angle = (index * 60f) * Mathf.Deg2Rad;
+                float r = spacing * 0.65f;
+                return center + new Vector3(Mathf.Cos(angle) * r, 0f, Mathf.Sin(angle) * r);
+            }
+            else
+            {
+                float angle = (index * 137.508f) * Mathf.Deg2Rad;
+                float r = spacing * Mathf.Sqrt(index + 1) * 0.4f;
+                return center + new Vector3(Mathf.Cos(angle) * r, 0f, Mathf.Sin(angle) * r);
+            }
         }
 
         private void UpdateTeamColor()
@@ -515,7 +515,7 @@ namespace RealmCommander.RTS
 
             Building targetBuilding = target.GetComponent<Building>();
             if (targetBuilding != null)
-                return targetBuilding.IsAlive && (targetBuilding.tag == "Enemy") != isEnemy;
+                return targetBuilding.IsAlive && targetBuilding.TeamId == (isEnemy ? 0 : 1);
 
             return false;
         }

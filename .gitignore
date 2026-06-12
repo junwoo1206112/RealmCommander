@@ -56,6 +56,16 @@ nul
 # OpenSpec
 .opencode/
 
+# MiMo Code agent
+MiMo-Code/
+
+# Unity Recovery folder
+Assets/_Recovery/
+Assets/_Recovery.meta
+
 # Third-party package samples not used by this portfolio project
 [Aa]ssets/[Mm]irror/[Ee]xamples/
 [Aa]ssets/[Mm]irror/[Hh]osting/
+
+# Portfolio video files (large, use external hosting)
+Portfolio/Video/

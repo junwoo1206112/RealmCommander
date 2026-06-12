@@ -4,6 +4,8 @@ using System.Collections.Generic;
 using Mirror;
 using RealmCommander.AI;
 using RealmCommander.RTS;
+using RealmCommander.RPG;
+using UnityEngine.AI;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -40,6 +42,7 @@ namespace RealmCommander.Network
         private bool resourceIsolationValidated;
         private bool hostReadyLogged;
         private bool clientPassSent;
+        private bool heroSkillsValidated;
         private readonly Dictionary<uint, Vector3> hostEnemyStarts = new Dictionary<uint, Vector3>();
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
@@ -166,6 +169,7 @@ namespace RealmCommander.Network
             }
 
             if (!teamZeroOwned || !teamOneOwned || trackedFriendly == null || trackedEnemy == null) return;
+            if (!ValidateHeroSkills(trackedEnemy)) return;
 
             ValidateHostOwnedMovement(trackedFriendly);
 
@@ -191,6 +195,70 @@ namespace RealmCommander.Network
                 hostReadyLogged = true;
                 Debug.Log("[MultiplayerSmoke] HOST_READY ownership=ok waiting_for_remote_move");
             }
+        }
+
+        private bool ValidateHeroSkills(Unit enemyTarget)
+        {
+            if (heroSkillsValidated) return true;
+
+            Hero teamZeroHero = null;
+            Hero teamOneHero = null;
+            foreach (Hero hero in FindObjectsByType<Hero>(FindObjectsSortMode.None))
+            {
+                NetworkConnectionToClient ownerConnection = hero.netIdentity.connectionToClient;
+                NetworkPlayer owner = ownerConnection != null && ownerConnection.identity != null
+                    ? ownerConnection.identity.GetComponent<NetworkPlayer>()
+                    : null;
+                if (owner == null || owner.teamId != hero.TeamId)
+                {
+                    Fail($"Hero authority mismatch. hero={hero.name}, team={hero.TeamId}");
+                    return false;
+                }
+
+                if (hero.TeamId == 0) teamZeroHero = hero;
+                if (hero.TeamId == 1) teamOneHero = hero;
+            }
+
+            if (teamZeroHero == null || teamOneHero == null) return false;
+            if (teamZeroHero.Data.skills.Count != 2 || teamOneHero.Data.skills.Count != 2)
+            {
+                Fail("Each team must have one hero with exactly two skills.");
+                return false;
+            }
+
+            Vector3 castPosition = enemyTarget.transform.position + new Vector3(-2f, 0f, 0f);
+            NavMeshAgent heroAgent = teamZeroHero.GetComponent<NavMeshAgent>();
+            if (heroAgent == null || !NavMesh.SamplePosition(castPosition, out NavMeshHit heroHit, 3f, NavMesh.AllAreas))
+                return false;
+            heroAgent.Warp(heroHit.position);
+
+            float targetHealthBefore = enemyTarget.CurrentHealth;
+            float manaBefore = teamZeroHero.Data.currentMana;
+            if (!teamZeroHero.TryCastSkill(0, enemyTarget.gameObject) || enemyTarget.CurrentHealth >= targetHealthBefore)
+            {
+                Fail("Arc Strike did not damage the enemy target.");
+                return false;
+            }
+
+            teamZeroHero.TakeDamage(80f);
+            float healthBeforeHeal = teamZeroHero.Data.currentHealth;
+            if (!teamZeroHero.TryCastSkill(1, null) || teamZeroHero.Data.currentHealth <= healthBeforeHeal)
+            {
+                Fail("Rally Heal did not restore hero health.");
+                return false;
+            }
+
+            if (teamZeroHero.Data.currentMana >= manaBefore ||
+                teamZeroHero.Data.skills[0].currentCooldown <= 0f ||
+                teamZeroHero.Data.skills[1].currentCooldown <= 0f)
+            {
+                Fail("Hero mana or cooldown state was not applied.");
+                return false;
+            }
+
+            heroSkillsValidated = true;
+            Debug.Log($"[MultiplayerSmoke] HERO_SKILLS_PASS heroes=2 arcDamage={targetHealthBefore - enemyTarget.CurrentHealth:F1} heal={teamZeroHero.Data.currentHealth - healthBeforeHeal:F1}");
+            return true;
         }
 
         private bool ValidateResourceIsolation()

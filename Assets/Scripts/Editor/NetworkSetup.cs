@@ -145,8 +145,42 @@ namespace RealmCommander.Editor
 
             EditorUtility.SetDirty(nm);
 
-            EditorUtility.DisplayDialog("Transport Fix",
-                $"Transport를 할당했습니다: {transport.GetType().Name}\n경고가 사라집니다.", "확인");
+                EditorUtility.DisplayDialog("Transport Fix",
+                    $"Transport를 할당했습니다: {transport.GetType().Name}\n경고가 사라집니다.", "확인");
+        }
+
+        [MenuItem("Tools/Realm Commander/Fix Camera Controller")]
+        public static void FixCameraController()
+        {
+            Camera cam = Camera.main;
+            if (cam == null)
+            {
+                var camObj = GameObject.Find("Main Camera");
+                if (camObj != null) cam = camObj.GetComponent<Camera>();
+            }
+            if (cam == null)
+            {
+                EditorUtility.DisplayDialog("Error", "Main Camera를 찾을 수 없습니다.", "확인");
+                return;
+            }
+
+            if (cam.GetComponent<RealmCommander.RTS.MobileRTSCameraController>() == null)
+            {
+                Undo.AddComponent<RealmCommander.RTS.MobileRTSCameraController>(cam.gameObject);
+                EditorUtility.DisplayDialog("완료",
+                    $"Main Camera에 MobileRTSCameraController를 추가했습니다.\n" +
+                    $"위치: {cam.gameObject.name}\n" +
+                    $"카메라 이동: WASD / 중앙클릭 드래그\n" +
+                    $"시점 회전: Q / E\n" +
+                    $"줌: 마우스 휠", "확인");
+            }
+            else
+            {
+                EditorUtility.DisplayDialog("Info",
+                    "MobileRTSCameraController가 이미 존재합니다.\n" +
+                    $"위치: {cam.gameObject.name}\n" +
+                    $"enabled: {cam.GetComponent<RealmCommander.RTS.MobileRTSCameraController>().enabled}", "확인");
+            }
         }
     }
 }

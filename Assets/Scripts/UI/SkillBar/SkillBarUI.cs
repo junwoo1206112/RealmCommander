@@ -20,9 +20,17 @@ namespace RealmCommander.UI
         {
             if (hero == null)
             {
-                gameObject.SetActive(false);
-                return;
+                foreach (Hero candidate in FindObjectsByType<Hero>(FindObjectsSortMode.None))
+                {
+                    if (candidate.CanIssueLocalCommands)
+                    {
+                        hero = candidate;
+                        break;
+                    }
+                }
             }
+
+            if (hero == null) return;
 
             hero.OnStatsChanged += UpdateHeroUI;
             UpdateHeroUI(hero.Data);
@@ -84,12 +92,7 @@ namespace RealmCommander.UI
         {
             if (hero == null) return;
 
-            GameObject target = null;
-            var selected = SelectionManager.Instance?.SelectedUnits;
-            if (selected != null && selected.Count > 0)
-            {
-                target = selected[0];
-            }
+            GameObject target = index == 0 ? hero.CurrentTarget : null;
 
             hero.TryCastSkill(index, target);
         }
