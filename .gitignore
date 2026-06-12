@@ -63,6 +63,9 @@ MiMo-Code/
 Assets/_Recovery/
 Assets/_Recovery.meta
 
+# Unity ProjectSettings (auto-generated)
+ProjectSettings/NavMeshAreas.asset
+
 # Third-party package samples not used by this portfolio project
 [Aa]ssets/[Mm]irror/[Ee]xamples/
 [Aa]ssets/[Mm]irror/[Hh]osting/
