@@ -17,12 +17,12 @@ namespace RealmCommander.UI
         {
             if (titleText != null)
             {
-                titleText.text = "영웅의 전장\nRealm Commander";
+                titleText.text = "Realm Commander";
             }
 
             if (versionText != null)
             {
-                versionText.text = $"v1.0.0";
+                versionText.text = "v1.0.0";
             }
 
             if (startGameButton != null)
@@ -34,15 +34,19 @@ namespace RealmCommander.UI
             {
                 quitButton.onClick.AddListener(OnQuit);
             }
+
+            Audio.AudioManager.Instance?.PlayMenuMusic();
         }
 
         public void OnStartGame()
         {
+            Audio.AudioManager.Instance?.PlayClick();
             SceneManager.LoadScene("LobbyScene");
         }
 
         public void OnQuit()
         {
+            Audio.AudioManager.Instance?.PlayClick();
 #if UNITY_EDITOR
             UnityEditor.EditorApplication.isPlaying = false;
 #else

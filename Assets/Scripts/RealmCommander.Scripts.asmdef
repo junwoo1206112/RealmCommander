@@ -1,0 +1,20 @@
+{
+    "name": "RealmCommander.Scripts",
+    "rootNamespace": "RealmCommander",
+    "references": [
+        "Mirror",
+        "Mirror.Components",
+        "Mirror.Transports",
+        "Telepathy",
+        "Unity.TextMeshPro"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

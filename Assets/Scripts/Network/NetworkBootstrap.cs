@@ -11,6 +11,8 @@ namespace RealmCommander.Network
 
         public static NetworkManager EnsureNetworkManager()
         {
+            DestroyDuplicateNetworkManagers();
+
             if (NetworkManager.singleton != null)
             {
                 ConfigureNetworkPrefabs(NetworkManager.singleton);
@@ -20,6 +22,8 @@ namespace RealmCommander.Network
             var existing = Object.FindAnyObjectByType<NetworkManager>();
             if (existing != null)
             {
+                existing.onlineScene = "Assets/Scenes/MainScene.unity";
+                existing.offlineScene = "Assets/Scenes/MainMenuScene.unity";
                 ConfigureNetworkPrefabs(existing);
                 Debug.Log("[NetworkBootstrap] Using existing NetworkManager from scene");
                 return existing;
@@ -42,6 +46,20 @@ namespace RealmCommander.Network
             return NetworkManager.singleton;
         }
 
+        private static void DestroyDuplicateNetworkManagers()
+        {
+            NetworkManager singleton = NetworkManager.singleton;
+            var all = Object.FindObjectsByType<NetworkManager>(FindObjectsSortMode.None);
+            foreach (var nm in all)
+            {
+                if (nm != singleton)
+                {
+                    Debug.Log($"[NetworkBootstrap] Destroying duplicate NetworkManager: {nm.gameObject.name}");
+                    Object.Destroy(nm.gameObject);
+                }
+            }
+        }
+
         private static void ConfigureNetworkPrefabs(NetworkManager networkManager)
         {
             _cachedPlayerPrefab = Resources.Load<GameObject>("Player");
@@ -57,10 +75,6 @@ namespace RealmCommander.Network
             GameObject unitPrefab = Resources.Load<GameObject>("Unit");
             if (unitPrefab != null && !networkManager.spawnPrefabs.Contains(unitPrefab))
                 networkManager.spawnPrefabs.Add(unitPrefab);
-
-            GameObject heroPrefab = Resources.Load<GameObject>("CommanderHero");
-            if (heroPrefab != null && !networkManager.spawnPrefabs.Contains(heroPrefab))
-                networkManager.spawnPrefabs.Add(heroPrefab);
 
             Debug.Log("[NetworkBootstrap] Network prefabs configured");
         }

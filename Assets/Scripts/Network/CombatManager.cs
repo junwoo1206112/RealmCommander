@@ -12,6 +12,7 @@ namespace RealmCommander.Network
             if (Instance == null)
             {
                 Instance = this;
+                DontDestroyOnLoad(gameObject);
             }
             else if (Instance != this)
             {
@@ -33,26 +34,23 @@ namespace RealmCommander.Network
             if (attacker == target) return false;
 
             var attackerUnit = attacker.GetComponent<RTS.Unit>();
-            var attackerHero = attacker.GetComponent<RPG.Hero>();
             var targetUnit = target.GetComponent<RTS.Unit>();
             var targetBuilding = target.GetComponent<RTS.Building>();
 
             if (targetUnit == null && targetBuilding == null) return false;
-            if (attackerUnit == null && attackerHero == null) return false;
-            if (attackerUnit != null && !attackerUnit.IsAlive) return false;
-            if (attackerHero != null && !attackerHero.IsAlive) return false;
+            if (attackerUnit == null) return false;
+            if (!attackerUnit.IsAlive) return false;
             if (targetUnit != null && !targetUnit.IsAlive) return false;
             if (targetBuilding != null && !targetBuilding.IsAlive) return false;
 
             float distance = Vector3.Distance(attacker.transform.position, target.transform.position);
-            float attackRange = attackerUnit != null ? attackerUnit.AttackRange : attackerHero.Data.attackRange;
-            if (distance > attackRange * 1.2f) return false;
+            if (distance > attackerUnit.AttackRange * 1.2f) return false;
 
-            bool attackerIsEnemy = attackerUnit != null ? attackerUnit.IsEnemy : attackerHero.IsEnemy;
+            int attackerTeam = attackerUnit.IsEnemy ? 1 : 0;
             bool targetIsEnemy = targetUnit != null ? targetUnit.IsEnemy
-                : (targetBuilding != null && targetBuilding.TeamId == 1);
+                : (targetBuilding != null && targetBuilding.TeamId != attackerTeam);
 
-            if (attackerIsEnemy == targetIsEnemy) return false;
+            if (attackerUnit.IsEnemy == targetIsEnemy) return false;
 
             return true;
         }
@@ -60,50 +58,39 @@ namespace RealmCommander.Network
         [Server]
         public void ApplyCombatDamage(GameObject attacker, GameObject target, float damage)
         {
+            if (!isServer) return;
             if (!ValidateAttack(attacker, target)) return;
 
             var targetUnit = target.GetComponent<RTS.Unit>();
             if (targetUnit != null)
             {
                 targetUnit.TakeDamage(damage);
+                RpcPlayHitFeedback(target, damage, false);
+                RpcShowDamageNumber(target, damage);
                 return;
             }
 
             var targetBuilding = target.GetComponent<RTS.Building>();
             if (targetBuilding != null)
+            {
                 targetBuilding.TakeDamage(damage);
+                RpcPlayHitFeedback(target, damage, false);
+                RpcShowDamageNumber(target, damage);
+            }
         }
 
-        [Server]
-        public void ApplySkillDamage(GameObject caster, GameObject target, float damage, bool canHitAllies = false)
+        [ClientRpc]
+        private void RpcShowDamageNumber(GameObject target, float damage)
         {
-            if (caster == null || target == null) return;
-            if (caster == target) return;
+            if (target != null)
+                Visuals.CombatFeedback.ShowDamageNumber(target, damage);
+        }
 
-            if (!canHitAllies)
-            {
-                var casterUnit = caster.GetComponent<RTS.Unit>();
-                var casterHero = caster.GetComponent<RPG.Hero>();
-                var targetUnit = target.GetComponent<RTS.Unit>();
-                var targetBuilding = target.GetComponent<RTS.Building>();
-
-                bool casterIsEnemy = casterUnit != null ? casterUnit.IsEnemy : (casterHero != null && casterHero.IsEnemy);
-                bool targetIsEnemy = targetUnit != null ? targetUnit.IsEnemy
-                    : (targetBuilding != null && targetBuilding.TeamId == 1);
-
-                if (casterIsEnemy == targetIsEnemy) return;
-            }
-
-            var tUnit = target.GetComponent<RTS.Unit>();
-            if (tUnit != null && tUnit.IsAlive)
-            {
-                tUnit.TakeDamage(damage);
-                return;
-            }
-
-            var tBuilding = target.GetComponent<RTS.Building>();
-            if (tBuilding != null && tBuilding.IsAlive)
-                tBuilding.TakeDamage(damage);
+        [ClientRpc]
+        private void RpcPlayHitFeedback(GameObject target, float damage, bool isSkill)
+        {
+            Color color = isSkill ? new Color(1f, 0.82f, 0.1f) : new Color(1f, 0.22f, 0.12f);
+            Visuals.CombatFeedback.PlayHit(target, color);
         }
     }
 }

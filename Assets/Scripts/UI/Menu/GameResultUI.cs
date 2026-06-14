@@ -65,13 +65,10 @@ namespace RealmCommander.UI
 
         private void OnPlayAgain()
         {
-            if (NetworkServer.active)
+            var gameManager = NetworkGameManager.Instance;
+            if (gameManager != null)
             {
-                var gameManager = NetworkGameManager.Instance;
-                if (gameManager != null)
-                {
-                    gameManager.ReturnToLobby();
-                }
+                gameManager.ReturnToLobby();
             }
         }
     }

@@ -2,7 +2,6 @@ using System;
 using UnityEngine;
 using Mirror;
 using RealmCommander.Core;
-using RealmCommander.RTS;
 
 namespace RealmCommander.RTS
 {
@@ -18,36 +17,42 @@ namespace RealmCommander.RTS
         [SerializeField] private Color validColor = Color.green;
         [SerializeField] private Color invalidColor = Color.red;
 
+        [Header("Placement Rules")]
+        [SerializeField] private bool snapToGrid = true;
+        [SerializeField, Min(0.25f)] private float gridSize = 1f;
+        [SerializeField, Min(0f)] private float spacingPadding = 0.35f;
+
         private bool isPlacing;
         private BuildingData currentBuilding;
         private Vector3 placementPosition;
         private bool isValidPosition;
+        private MaterialPropertyBlock indicatorColorBlock;
 
         public event Action<BuildingData> OnBuildingPlaced;
 
         private void Update()
         {
             if (isPlacing)
-            {
                 HandlePlacement();
-            }
         }
 
         public void StartPlacement(BuildingData buildingData)
         {
-            if (buildingData == null) return;
+            if (buildingData == null || buildingData.buildingPrefab == null) return;
 
             if (NetworkClient.active && !NetworkServer.active)
             {
-                Debug.LogWarning("멀티플레이 Client 건설은 아직 지원되지 않습니다. Host에서 건설해 주세요.");
+                Debug.LogWarning("[BuildingPlacer] Client-side building placement is not available yet. Please place buildings from the host.");
                 return;
             }
 
-            if (ResourceManager.Instance == null) return;
+            ResourceManager resources = ResourceManager.Instance;
+            if (resources == null) return;
 
-            if (!ResourceManager.Instance.CanAfford(buildingData.goldCost, buildingData.manaCost))
+            int teamId = Network.NetworkPlayer.Local != null ? Network.NetworkPlayer.Local.TeamId : 0;
+            if (!resources.CanAfford(teamId, buildingData.goldCost, buildingData.manaCost))
             {
-                Debug.Log("자원이 부족합니다!");
+                Debug.Log("[BuildingPlacer] Not enough resources.");
                 return;
             }
 
@@ -55,11 +60,9 @@ namespace RealmCommander.RTS
             isPlacing = true;
 
             if (placementIndicator != null)
-            {
                 placementIndicator.SetActive(true);
-            }
 
-            Debug.Log($"{buildingData.buildingName} 배치 모드 시작 (취소: 우클릭)");
+            Debug.Log($"[BuildingPlacer] Started placement for {buildingData.buildingName}. Right-click to cancel.");
         }
 
         public void CancelPlacement()
@@ -68,99 +71,101 @@ namespace RealmCommander.RTS
             currentBuilding = null;
 
             if (placementIndicator != null)
-            {
                 placementIndicator.SetActive(false);
-            }
 
-            Debug.Log("배치 취소");
+            Debug.Log("[BuildingPlacer] Placement canceled.");
         }
 
         private void HandlePlacement()
         {
             Camera camera = Camera.main != null ? Camera.main : FindFirstObjectByType<Camera>();
             if (camera == null) return;
-            Ray ray = camera.ScreenPointToRay(Input.mousePosition);
-            RaycastHit hit;
 
-            if (Physics.Raycast(ray, out hit, 1000f, groundLayer))
+            Ray ray = camera.ScreenPointToRay(Input.mousePosition);
+            if (Physics.Raycast(ray, out RaycastHit hit, 1000f, groundLayer))
             {
-                placementPosition = hit.point;
-                placementPosition.y = 0;
+                placementPosition = SnapPosition(hit.point);
+                placementPosition.y = 0f;
 
                 if (placementIndicator != null)
-                {
                     placementIndicator.transform.position = placementPosition;
-                }
 
                 isValidPosition = CheckValidPosition(placementPosition);
                 UpdateIndicatorColor();
 
                 if (Input.GetMouseButtonDown(0) && isValidPosition)
-                {
                     PlaceBuilding();
-                }
             }
 
             if (Input.GetMouseButtonDown(1))
-            {
                 CancelPlacement();
-            }
         }
 
         private bool CheckValidPosition(Vector3 position)
         {
-            Collider[] colliders = Physics.OverlapSphere(position, currentBuilding.buildingRadius, buildingLayer);
+            if (currentBuilding == null || currentBuilding.buildingPrefab == null) return false;
+
+            float radius = Mathf.Max(0.25f, currentBuilding.buildingRadius + spacingPadding);
+            Collider[] colliders = Physics.OverlapSphere(position, radius, buildingLayer);
             return colliders.Length == 0;
+        }
+
+        private Vector3 SnapPosition(Vector3 rawPosition)
+        {
+            if (!snapToGrid || gridSize <= 0f) return rawPosition;
+
+            rawPosition.x = Mathf.Round(rawPosition.x / gridSize) * gridSize;
+            rawPosition.z = Mathf.Round(rawPosition.z / gridSize) * gridSize;
+            return rawPosition;
         }
 
         private void UpdateIndicatorColor()
         {
-            if (placementIndicator != null)
-            {
-                Renderer renderer = placementIndicator.GetComponent<Renderer>();
-                if (renderer != null)
-                {
-                    renderer.material.color = isValidPosition ? validColor : invalidColor;
-                }
-            }
+            if (placementIndicator == null) return;
+
+            Renderer renderer = placementIndicator.GetComponent<Renderer>();
+            if (renderer == null) return;
+
+            indicatorColorBlock ??= new MaterialPropertyBlock();
+            indicatorColorBlock.SetColor("_Color", isValidPosition ? validColor : invalidColor);
+            renderer.SetPropertyBlock(indicatorColorBlock);
         }
 
         private void PlaceBuilding()
         {
-            if (!NetworkServer.active) return;
+            if (!NetworkServer.active || currentBuilding == null) return;
 
-            if (!CanAffordBuilding()) return;
-            ResourceManager.Instance.SpendGold(currentBuilding.goldCost);
-            ResourceManager.Instance.SpendMana(currentBuilding.manaCost);
+            ResourceManager resources = ResourceManager.Instance;
+            if (resources == null) return;
+
+            int teamId = Network.NetworkPlayer.Local != null ? Network.NetworkPlayer.Local.TeamId : 0;
+            if (!resources.TrySpend(teamId, currentBuilding.goldCost, currentBuilding.manaCost))
+            {
+                Debug.Log("[BuildingPlacer] Not enough resources.");
+                return;
+            }
 
             GameObject buildingObj = Instantiate(currentBuilding.buildingPrefab, placementPosition, Quaternion.identity);
             buildingObj.name = currentBuilding.buildingName;
 
-            NetworkServer.Spawn(buildingObj);
-
             Building building = buildingObj.GetComponent<Building>();
             if (building != null)
             {
+                building.ConfigureTeam(teamId);
                 building.StartConstruction();
             }
 
+            NetworkServer.Spawn(buildingObj);
+
             isPlacing = false;
-            var placedBuilding = currentBuilding;
+            BuildingData placedBuilding = currentBuilding;
             currentBuilding = null;
 
             if (placementIndicator != null)
-            {
                 placementIndicator.SetActive(false);
-            }
 
             OnBuildingPlaced?.Invoke(placedBuilding);
-            Debug.Log($"{placedBuilding.buildingName} 건설 시작!");
-        }
-
-        private bool CanAffordBuilding()
-        {
-            if (ResourceManager.Instance == null) return false;
-            return ResourceManager.Instance.CanAfford(currentBuilding.goldCost, currentBuilding.manaCost);
+            Debug.Log($"[BuildingPlacer] Started construction for {placedBuilding.buildingName} at {placementPosition}.");
         }
 
         private void OnDrawGizmosSelected()
@@ -168,11 +173,11 @@ namespace RealmCommander.RTS
             if (!isPlacing || currentBuilding == null) return;
 
             Gizmos.color = isValidPosition ? Color.green : Color.red;
-            Gizmos.DrawWireSphere(placementPosition, currentBuilding.buildingRadius);
+            Gizmos.DrawWireSphere(placementPosition, currentBuilding.buildingRadius + spacingPadding);
         }
     }
 
-    [System.Serializable]
+    [Serializable]
     public class BuildingData
     {
         public string buildingName;

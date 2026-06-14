@@ -11,11 +11,11 @@ namespace RealmCommander.RTS
         private float elapsed;
         private LineRenderer ring;
         private Color baseColor;
+        private static Material cachedMaterial;
 
         public static MoveMarker Spawn(Vector3 position, bool isAttack = false)
         {
             GameObject marker = new GameObject("MoveMarker");
-            marker.name = "MoveMarker";
             marker.transform.position = position + Vector3.up * 0.08f;
 
             var moveMarker = marker.AddComponent<MoveMarker>();
@@ -23,6 +23,17 @@ namespace RealmCommander.RTS
 
             Destroy(marker, moveMarker.duration + 0.1f);
             return moveMarker;
+        }
+
+        private static Material GetSharedMaterial()
+        {
+            if (cachedMaterial == null)
+            {
+                Shader shader = Shader.Find("Sprites/Default");
+                if (shader == null) shader = Shader.Find("Universal Render Pipeline/Unlit");
+                cachedMaterial = new Material(shader);
+            }
+            return cachedMaterial;
         }
 
         private void Awake()
@@ -36,10 +47,7 @@ namespace RealmCommander.RTS
             ring.numCapVertices = 2;
             ring.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             ring.receiveShadows = false;
-
-            Shader shader = Shader.Find("Sprites/Default");
-            if (shader == null) shader = Shader.Find("Universal Render Pipeline/Unlit");
-            ring.material = new Material(shader);
+            ring.material = GetSharedMaterial();
 
             for (int i = 0; i < ring.positionCount; i++)
             {
@@ -79,8 +87,8 @@ namespace RealmCommander.RTS
 
         private void OnDestroy()
         {
-            if (ring != null && ring.material != null)
-                Destroy(ring.material);
+            if (ring != null)
+                ring.material = null;
         }
     }
 }

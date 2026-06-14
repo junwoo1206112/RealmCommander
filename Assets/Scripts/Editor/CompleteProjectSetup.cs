@@ -53,7 +53,7 @@ namespace RealmCommander.Editor
             canvas.AddComponent<GraphicRaycaster>();
 
             // Title
-            CreateText(canvas.transform, "Title", "영웅의 전장\nRealm Commander", 48, new Vector2(0.5f, 0.8f), new Vector2(400, 200));
+            CreateText(canvas.transform, "Title", "Realm Commander", 48, new Vector2(0.5f, 0.8f), new Vector2(400, 200));
 
             // Start Button
             GameObject startBtn = CreateButton(canvas.transform, "StartButton", "Start Game", new Color(0.2f, 0.6f, 0.2f), new Vector2(0.5f, 0.4f), new Vector2(200, 50));

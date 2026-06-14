@@ -102,11 +102,6 @@ namespace RealmCommander.Editor
             resourceManager.AddComponent<RTS.ResourceManager>();
             Undo.RegisterCreatedObjectUndo(resourceManager, "Create ResourceManager");
 
-            // QuestManager
-            GameObject questManager = new GameObject("QuestManager");
-            questManager.AddComponent<RPG.QuestManager>();
-            Undo.RegisterCreatedObjectUndo(questManager, "Create QuestManager");
-
             // SpecManager
             GameObject specManager = new GameObject("SpecManager");
             specManager.AddComponent<OpenSpec.SpecManager>();
@@ -308,9 +303,6 @@ namespace RealmCommander.Editor
             // Minimap Panel (좌하단)
             CreateMinimapPanel(canvasObj.transform);
 
-            // SkillBar Panel (우하단)
-            CreateSkillBarPanel(canvasObj.transform);
-
             // Selection Panel (하단 중앙)
             CreateSelectionPanel(canvasObj.transform);
 
@@ -381,36 +373,6 @@ namespace RealmCommander.Editor
 
             // MinimapController 추가
             var minimapController = minimapPanel.AddComponent<RTS.MinimapController>();
-        }
-
-        private static void CreateSkillBarPanel(Transform parent)
-        {
-            GameObject skillPanel = CreatePanel(parent, "SkillBar_Panel",
-                new Vector2(1, 0), new Vector2(1, 0),
-                new Vector2(-300, 50), new Vector2(-50, 200));
-
-            // Hero Info
-            CreateText(skillPanel.transform, "LevelText", "Lv.1",
-                new Vector2(0, 120), new Vector2(100, 30), TextAlignmentOptions.Center);
-
-            // HP Bar
-            CreateSlider(skillPanel.transform, "HealthBar", Color.red,
-                new Vector2(0, 80), new Vector2(200, 20));
-
-            // MP Bar
-            CreateSlider(skillPanel.transform, "ManaBar", Color.blue,
-                new Vector2(0, 50), new Vector2(200, 20));
-
-            // EXP Bar
-            CreateSlider(skillPanel.transform, "ExpBar", Color.yellow,
-                new Vector2(0, 20), new Vector2(200, 10));
-
-            // Skill Buttons
-            for (int i = 0; i < 4; i++)
-            {
-                CreateButton(skillPanel.transform, $"Skill{i}", (i + 1).ToString(),
-                    new Vector2(-75 + i * 50, -30), new Vector2(40, 40));
-            }
         }
 
         private static void CreateSelectionPanel(Transform parent)

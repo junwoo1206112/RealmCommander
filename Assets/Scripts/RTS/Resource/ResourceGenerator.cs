@@ -8,7 +8,6 @@ namespace RealmCommander.RTS
     {
         [SerializeField] private ResourceType resourceType = ResourceType.Gold;
         [SerializeField] private float generationRate = 5f;
-        [SerializeField] private float collectionRadius = 3f;
         [SerializeField, Range(0, 1)] private int teamId;
 
         public ResourceType ResourceType => resourceType;
@@ -44,7 +43,7 @@ namespace RealmCommander.RTS
         private void OnDrawGizmosSelected()
         {
             Gizmos.color = resourceType == ResourceType.Gold ? Color.yellow : Color.cyan;
-            Gizmos.DrawWireSphere(transform.position, collectionRadius);
+            Gizmos.DrawWireSphere(transform.position, 3f);
         }
     }
 

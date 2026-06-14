@@ -1,21 +1,25 @@
 # Realm Commander
 
-Unity 6와 Mirror로 제작한 서버 권한형 모바일 RTS 포트폴리오입니다. 핵심 목표는 Host/Client 두 플레이어가 각자 소유한 유닛을 선택하고 이동·공격하며, 서버가 권한과 전투 결과를 검증하는 작은 1v1 수직 슬라이스입니다.
+Unity 6와 Mirror로 제작한 서버 권한형 모바일 RTS 포트폴리오입니다. 핵심 목표는 Host/Client 두 플레이어가 각자 소유한 유닛과 건물을 선택하고 이동·공격·생산하며, 서버가 권한과 전투 결과를 검증하는 작은 1v1 수직 슬라이스입니다.
 
 ## 검증된 핵심 기능
 
-- `MainMenu -> Lobby -> MainScene` Host 흐름과 자동 게임 시작
+- `MainMenu -> Lobby -> MainScene` Host/Client 흐름
 - Mirror Host/Client 연결, TCP `7777`, 플레이어별 `team 0/1` 배정
-- 서버가 생성한 플레이어 및 유닛 소유권
-- 팀별 Gold/Mana 분리와 서버 권한 생산 비용 처리
+- 서버가 생성한 플레이어, 유닛, 건물 소유권
+- 비소유 유닛 명령 차단
+- 서버 권한 이동, 공격, 데미지 처리
+- 팀별 Gold/Mana 분리와 생산 비용 처리
 - 건물 팀/소유권 동기화와 팀별 유닛 생산
-- 비소유 유닛 명령 차단과 서버 권한 이동·전투
 - `NetworkTransformReliable` 기반 위치 동기화
-- PC 박스 선택/우클릭 명령과 모바일 터치 선택/명령
-- 모바일 두 손가락 카메라, Safe Area, 가로 화면 대응
-- NavMesh 이동, 적 AI, CSV 기반 유닛·건물·스킬 데이터
+- PC 박스 선택/우클릭 명령
+- 모바일 터치 선택/명령, 두 손가락 카메라, Safe Area, 가로 화면 대응
+- NavMesh 이동, 적 AI, CSV 기반 유닛·건물 데이터
 - 연결 주소와 상태를 표시하는 Host/Client 로비
-- 팀당 Commander Hero 1기와 서버 권한 스킬 2개: `Arc Strike`, `Rally Heal`
+
+## 제외된 범위
+
+RPG 확장 기능과 별도 스킬 UI는 현재 완료 기능에서 제거했습니다. 포트폴리오 설명과 검증 기준은 RTS 1v1 수직 슬라이스에만 맞춥니다.
 
 ## 실제 검증 결과
 
@@ -52,7 +56,7 @@ Windows 빌드는 Unity 메뉴 `Tools > Realm Commander > Build Windows Portfoli
 |---|---|
 | Engine | Unity 6, C# |
 | Network | Mirror, Telepathy TCP, Server Authority |
-| Gameplay | Unit, Building, Commander Hero, CombatManager, NetworkGameManager |
+| Gameplay | Unit, Building, ResourceManager, CombatManager, NetworkGameManager |
 | Movement | NavMeshAgent, NetworkTransformReliable |
 | Input/UI | PC RTS 입력, Mobile RTS 입력, UGUI |
 | Data | CSV + Resources, SpecManager |
@@ -60,13 +64,11 @@ Windows 빌드는 Unity 메뉴 `Tools > Realm Commander > Build Windows Portfoli
 
 프로젝트 소유 코드는 `Assets/Scripts`에 있으며 `Assets/Mirror`는 벤더링된 외부 라이브러리입니다. 세부 설계는 [Docs/Architecture.md](Docs/Architecture.md), 범위 판단은 [Docs/ProjectDirection.md](Docs/ProjectDirection.md)를 참고하세요.
 
-## 범위와 남은 한계
+## 남은 한계
 
-- RPG 범위는 팀당 Commander Hero 1기와 `Arc Strike`/`Rally Heal` 2개 스킬까지만 완료 기능으로 제한합니다.
-- Inventory는 저장, 드롭, 상점 경제와 연결되지 않은 `Prototype`입니다.
-- Quest는 핵심 1v1 루프 및 저장과 연결되지 않은 `Prototype`입니다.
-- 경쟁형 자원은 팀별로 분리됐지만, 원격 Client의 신규 건물 배치는 아직 지원하지 않으며 UI에서 명시적으로 차단합니다.
+- 원격 Client의 신규 건물 배치는 아직 지원하지 않으며 UI에서 명시적으로 차단합니다.
 - 실제 외부 장비 테스트, 공인 WAN/NAT 통과, 자동 EditMode/PlayMode 테스트는 후속 검증 항목입니다.
+- 최근 범위 정리 이후 Unity compile log와 Host/Client smoke 로그를 다시 확보해야 합니다.
 - 포트폴리오 제출 전 대표 스크린샷과 60~90초 플레이 영상을 추가해야 합니다.
 
 ## 프로젝트 문서
@@ -77,5 +79,5 @@ Windows 빌드는 Unity 메뉴 `Tools > Realm Commander > Build Windows Portfoli
 - [테스트 시나리오](Docs/TestCases.md)
 - [모바일 RTS 지원 근거](Docs/ESTgamesMobileRTSApplication.md)
 
-개발자: `junwoo1206112`
+개발자: `junwoo1206112`  
 GitHub: <https://github.com/junwoo1206112>

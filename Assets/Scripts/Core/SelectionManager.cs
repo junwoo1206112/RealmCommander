@@ -71,6 +71,7 @@ namespace RealmCommander.Core
             selectedLookup.Add(unit);
             UpdateUnitSelectionVisual(unit, true);
             OnSelectionChanged?.Invoke(selectedUnits);
+            Audio.AudioManager.Instance?.PlayUnitSelect();
         }
 
         public void AddToSelection(GameObject unit)
@@ -103,23 +104,25 @@ namespace RealmCommander.Core
             if (cam == null) cam = FindFirstObjectByType<Camera>();
             if (cam == null) return;
 
-            foreach (var unit in FindObjectsByType<RTS.Unit>(FindObjectsSortMode.None))
+            var registry = EntityRegistry.Instance;
+            if (registry != null)
             {
-                if (unit == null || !unit.IsAlive || !unit.CanIssueLocalCommands) continue;
-                if (selectedLookup.Contains(unit.gameObject)) continue;
-
-                if (!selectableUnits.Contains(unit.gameObject))
-                    selectableUnits.Add(unit.gameObject);
-
-                if (IsUnitInSelectionRect(unit, selectionBox, cam))
+                foreach (var unit in registry.AllUnits)
                 {
-                    selectedUnits.Add(unit.gameObject);
-                    selectedLookup.Add(unit.gameObject);
-                    UpdateUnitSelectionVisual(unit.gameObject, true);
+                    if (unit == null || !unit.IsAlive || !unit.CanIssueLocalCommands) continue;
+                    if (selectedLookup.Contains(unit.gameObject)) continue;
+
+                    if (!selectableUnits.Contains(unit.gameObject))
+                        selectableUnits.Add(unit.gameObject);
+
+                    if (IsUnitInSelectionRect(unit, selectionBox, cam))
+                    {
+                        selectedUnits.Add(unit.gameObject);
+                        selectedLookup.Add(unit.gameObject);
+                        UpdateUnitSelectionVisual(unit.gameObject, true);
+                    }
                 }
             }
-
-            AddHeroesInSelectionRect(selectionBox, cam, true);
 
             OnSelectionChanged?.Invoke(selectedUnits);
         }
@@ -146,21 +149,23 @@ namespace RealmCommander.Core
             if (cam == null) cam = FindFirstObjectByType<Camera>();
             if (cam == null) return;
 
-            foreach (var unit in FindObjectsByType<RTS.Unit>(FindObjectsSortMode.None))
+            var registry = EntityRegistry.Instance;
+            if (registry != null)
             {
-                if (unit == null || !unit.IsAlive || !unit.CanIssueLocalCommands) continue;
-                if (!selectableUnits.Contains(unit.gameObject))
-                    selectableUnits.Add(unit.gameObject);
-
-                if (IsUnitInSelectionRect(unit, selectionBox, cam))
+                foreach (var unit in registry.AllUnits)
                 {
-                    selectedUnits.Add(unit.gameObject);
-                    selectedLookup.Add(unit.gameObject);
-                    UpdateUnitSelectionVisual(unit.gameObject, true);
+                    if (unit == null || !unit.IsAlive || !unit.CanIssueLocalCommands) continue;
+                    if (!selectableUnits.Contains(unit.gameObject))
+                        selectableUnits.Add(unit.gameObject);
+
+                    if (IsUnitInSelectionRect(unit, selectionBox, cam))
+                    {
+                        selectedUnits.Add(unit.gameObject);
+                        selectedLookup.Add(unit.gameObject);
+                        UpdateUnitSelectionVisual(unit.gameObject, true);
+                    }
                 }
             }
-
-            AddHeroesInSelectionRect(selectionBox, cam, false);
 
             OnSelectionChanged?.Invoke(selectedUnits);
         }
@@ -179,13 +184,6 @@ namespace RealmCommander.Core
             if (unitComponent != null)
             {
                 unitComponent.SetSelected(isSelected);
-                return;
-            }
-
-            var heroComponent = unit.GetComponent<RPG.Hero>();
-            if (heroComponent != null)
-            {
-                heroComponent.SetSelected(isSelected);
                 return;
             }
 
@@ -209,19 +207,5 @@ namespace RealmCommander.Core
             return -1;
         }
 
-        private void AddHeroesInSelectionRect(Rect selectionBox, Camera cam, bool preserveSelection)
-        {
-            foreach (var hero in FindObjectsByType<RPG.Hero>(FindObjectsSortMode.None))
-            {
-                if (hero == null || !hero.IsAlive || !hero.CanIssueLocalCommands) continue;
-                if (preserveSelection && selectedLookup.Contains(hero.gameObject)) continue;
-                Vector3 screenPos = cam.WorldToScreenPoint(hero.transform.position);
-                if (screenPos.z <= 0 || !selectionBox.Contains(new Vector2(screenPos.x, screenPos.y))) continue;
-                selectableUnits.Add(hero.gameObject);
-                selectedUnits.Add(hero.gameObject);
-                selectedLookup.Add(hero.gameObject);
-                UpdateUnitSelectionVisual(hero.gameObject, true);
-            }
-        }
     }
 }

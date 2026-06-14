@@ -38,14 +38,21 @@ namespace RealmCommander.Core
         private void OnDestroy()
         {
             if (Instance == this)
+            {
                 Instance = null;
-            Time.timeScale = 1f;
+                if (Network.NetworkGameManager.Instance == null)
+                    Time.timeScale = 1f;
+            }
         }
 
         public void StartGame()
         {
             IsPaused = false;
-            Time.timeScale = gameSpeed;
+            if (Network.NetworkGameManager.Instance == null)
+                Time.timeScale = gameSpeed;
+
+            Audio.AudioManager.Instance?.PlayBattleMusic();
+
             OnGameStarted?.Invoke();
         }
 

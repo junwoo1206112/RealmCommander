@@ -7,6 +7,17 @@ namespace RealmCommander.Network
     {
         public static string LastConnectionStatus { get; private set; } = "Idle";
 
+        public override void Awake()
+        {
+            if (singleton != null && singleton != this)
+            {
+                gameObject.SetActive(false);
+                Destroy(gameObject);
+                return;
+            }
+            base.Awake();
+        }
+
         public override void OnStartHost()
         {
             base.OnStartHost();
@@ -55,7 +66,7 @@ namespace RealmCommander.Network
             GameObject player = Instantiate(prefab);
             NetworkPlayer networkPlayer = player.GetComponent<NetworkPlayer>();
             if (networkPlayer != null)
-                networkPlayer.teamId = teamId;
+                networkPlayer.ServerSetTeamId(teamId);
 
             NetworkServer.AddPlayerForConnection(conn, player);
             AssignExistingEntities(conn, teamId);
@@ -76,7 +87,7 @@ namespace RealmCommander.Network
                     ? connection.identity.GetComponent<NetworkPlayer>()
                     : null;
                 if (player != null)
-                    AssignExistingEntities(connection, player.teamId);
+                    AssignExistingEntities(connection, player.TeamId);
             }
         }
 
@@ -93,7 +104,7 @@ namespace RealmCommander.Network
                 NetworkPlayer player = connection.identity != null
                     ? connection.identity.GetComponent<NetworkPlayer>()
                     : null;
-                if (player != null && player.teamId == 0)
+                if (player != null && player.TeamId == 0)
                     return 1;
             }
 
@@ -117,14 +128,6 @@ namespace RealmCommander.Network
                     continue;
 
                 building.netIdentity.AssignClientAuthority(connection);
-            }
-
-
-            foreach (RPG.Hero hero in FindObjectsByType<RPG.Hero>(FindObjectsSortMode.None))
-            {
-                if (hero == null || hero.TeamId != teamId || hero.netIdentity.connectionToClient != null)
-                    continue;
-                hero.netIdentity.AssignClientAuthority(connection);
             }
         }
     }

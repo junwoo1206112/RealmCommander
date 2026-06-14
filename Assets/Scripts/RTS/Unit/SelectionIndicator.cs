@@ -14,6 +14,9 @@ namespace RealmCommander.RTS
         [SerializeField] private float indicatorRadius = 0.8f;
 
         private Renderer indicatorRenderer;
+        private MaterialPropertyBlock propertyBlock;
+        private Mesh ringMesh;
+        private static Material sharedRingMaterial;
         private bool isSelected = false;
 
         private void Awake()
@@ -33,13 +36,20 @@ namespace RealmCommander.RTS
             MeshRenderer meshRenderer = ring.AddComponent<MeshRenderer>();
 
             // 링 메쉬 생성
-            Mesh ringMesh = CreateRing(indicatorRadius, indicatorRadius * 0.8f, 32);
-            meshFilter.mesh = ringMesh;
+            ringMesh = CreateRing(indicatorRadius, indicatorRadius * 0.8f, 32);
+            meshFilter.sharedMesh = ringMesh;
 
             // 머티리얼 생성
-            Material mat = new Material(Shader.Find("Unlit/Color"));
-            mat.color = unselectedColor;
-            meshRenderer.material = mat;
+            if (sharedRingMaterial == null)
+            {
+                Shader shader = Shader.Find("Unlit/Color") ?? Shader.Find("Sprites/Default");
+                sharedRingMaterial = new Material(shader) { color = Color.white };
+            }
+
+            meshRenderer.sharedMaterial = sharedRingMaterial;
+            propertyBlock = new MaterialPropertyBlock();
+            propertyBlock.SetColor("_Color", unselectedColor);
+            meshRenderer.SetPropertyBlock(propertyBlock);
 
             indicatorRenderer = meshRenderer;
             gameObject.SetActive(false);
@@ -94,10 +104,21 @@ namespace RealmCommander.RTS
 
             if (indicatorRenderer != null)
             {
-                indicatorRenderer.material.color = selected ? selectedColor : unselectedColor;
+                propertyBlock ??= new MaterialPropertyBlock();
+                propertyBlock.SetColor("_Color", selected ? selectedColor : unselectedColor);
+                indicatorRenderer.SetPropertyBlock(propertyBlock);
             }
         }
 
         public bool IsSelected => isSelected;
+
+        private void OnDestroy()
+        {
+            if (ringMesh != null)
+            {
+                Destroy(ringMesh);
+                ringMesh = null;
+            }
+        }
     }
 }

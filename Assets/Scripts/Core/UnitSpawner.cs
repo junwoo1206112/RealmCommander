@@ -3,7 +3,6 @@ using UnityEngine.AI;
 using Mirror;
 using RealmCommander.RTS;
 using RealmCommander.Network;
-using RealmCommander.RPG;
 
 namespace RealmCommander.Core
 {
@@ -12,21 +11,22 @@ namespace RealmCommander.Core
         [Header("Unit Prefabs")]
         [SerializeField] private GameObject friendlyUnitPrefab;
         [SerializeField] private GameObject enemyUnitPrefab;
-        [SerializeField] private GameObject heroPrefab;
 
-        public void Initialize(GameObject unitPrefab, GameObject commanderHeroPrefab = null)
+        public void Initialize(GameObject unitPrefab)
         {
             friendlyUnitPrefab = unitPrefab;
             enemyUnitPrefab = unitPrefab;
-            heroPrefab = commanderHeroPrefab;
         }
 
         [Header("Spawn Settings")]
-        [SerializeField] private int friendlyUnitCount = 5;
-        [SerializeField] private int enemyUnitCount = 5;
-        [SerializeField] private Vector3 friendlySpawnPosition = new Vector3(-10, 0, 0);
-        [SerializeField] private Vector3 enemySpawnPosition = new Vector3(10, 0, 0);
+        [SerializeField] private int friendlyUnitCount = 8;
+        [SerializeField] private int enemyUnitCount = 8;
+        [SerializeField] private Vector3 friendlySpawnPosition = new Vector3(-22, 0, 0);
+        [SerializeField] private Vector3 enemySpawnPosition = new Vector3(22, 0, 0);
         [SerializeField] private float spawnRadius = 3f;
+
+        [Header("CSV Spec IDs")]
+        [SerializeField] private string[] unitSpecIds = { "unit_worker", "unit_worker", "unit_soldier", "unit_soldier", "unit_soldier", "unit_archer", "unit_archer", "unit_mage" };
 
         private bool hasSpawned;
 
@@ -42,6 +42,8 @@ namespace RealmCommander.Core
             if (hasSpawned) return;
             hasSpawned = true;
 
+            EnsureStartingBases();
+
             NetworkConnectionToClient friendlyOwner = FindTeamConnection(0);
             NetworkConnectionToClient enemyOwner = FindTeamConnection(1);
 
@@ -55,7 +57,16 @@ namespace RealmCommander.Core
 
                     GameObject unit = Instantiate(friendlyUnitPrefab, spawnPos, Quaternion.identity);
                     unit.name = $"FriendlyUnit_{i}";
-                    unit.GetComponent<Unit>()?.ConfigureTeam(false);
+
+                    var unitComponent = unit.GetComponent<Unit>();
+                    unitComponent?.ConfigureTeam(false);
+
+                    if (unitSpecIds.Length > 0 && unitComponent != null)
+                    {
+                        string specId = unitSpecIds[i % unitSpecIds.Length];
+                        unitComponent.ApplySpec(specId);
+                    }
+
                     SpawnWithOwner(unit, friendlyOwner);
                 }
             }
@@ -74,14 +85,103 @@ namespace RealmCommander.Core
                     var unitComponent = unit.GetComponent<Unit>();
                     unitComponent?.ConfigureTeam(true);
 
+                    if (unitSpecIds.Length > 0 && unitComponent != null)
+                    {
+                        string specId = unitSpecIds[i % unitSpecIds.Length];
+                        unitComponent.ApplySpec(specId);
+                    }
+
                     SpawnWithOwner(unit, enemyOwner);
                 }
             }
 
-            SpawnHero(0, friendlySpawnPosition + new Vector3(0f, 0f, -4f), friendlyOwner);
-            SpawnHero(1, enemySpawnPosition + new Vector3(0f, 0f, 4f), enemyOwner);
+            Debug.Log($"[UnitSpawner] Spawned: {friendlyUnitCount} friendly, {enemyUnitCount} enemy units");
+        }
 
-            Debug.Log($"[UnitSpawner] Spawned: {friendlyUnitCount} friendly, {enemyUnitCount} enemy, 2 heroes");
+        [Server]
+        private static void EnsureStartingBases()
+        {
+            float friendlyX = -20f;
+            float enemyX = 20f;
+
+            bool hasFriendlyBase = false;
+            bool hasEnemyBase = false;
+            bool hasFriendlyBarracks = false;
+            bool hasEnemyBarracks = false;
+
+            foreach (Building building in FindObjectsByType<Building>(FindObjectsSortMode.None))
+            {
+                if (building == null || !building.IsAlive) continue;
+
+                if (building.BuildingType == BuildingType.Base)
+                {
+                    if (building.TeamId == 0)
+                    {
+                        hasFriendlyBase = true;
+                        MoveToPosition(building, new Vector3(friendlyX, 0f, 0f));
+                    }
+                    if (building.TeamId == 1)
+                    {
+                        hasEnemyBase = true;
+                        MoveToPosition(building, new Vector3(enemyX, 0f, 0f));
+                    }
+                }
+                if (building.BuildingType == BuildingType.Barracks)
+                {
+                    if (building.TeamId == 0)
+                    {
+                        hasFriendlyBarracks = true;
+                        MoveToPosition(building, new Vector3(friendlyX + 4f, 0f, 0f));
+                    }
+                    if (building.TeamId == 1)
+                    {
+                        hasEnemyBarracks = true;
+                        MoveToPosition(building, new Vector3(enemyX - 4f, 0f, 0f));
+                    }
+                }
+            }
+
+            if (!hasFriendlyBase)
+                CreateRuntimeBuilding("Blue Command Base", BuildingType.Base, new Vector3(friendlyX, 0f, 0f), 0, new Vector3(2.4f, 1.1f, 2.4f));
+            if (!hasEnemyBase)
+                CreateRuntimeBuilding("Red Command Base", BuildingType.Base, new Vector3(enemyX, 0f, 0f), 1, new Vector3(2.4f, 1.1f, 2.4f));
+
+            if (!hasFriendlyBarracks)
+                CreateRuntimeBuilding("Blue Barracks", BuildingType.Barracks, new Vector3(friendlyX + 4f, 0f, 0f), 0, new Vector3(2.1f, 1f, 2.1f));
+            if (!hasEnemyBarracks)
+                CreateRuntimeBuilding("Red Barracks", BuildingType.Barracks, new Vector3(enemyX - 4f, 0f, 0f), 1, new Vector3(2.1f, 1f, 2.1f));
+        }
+
+        private static void MoveToPosition(Building building, Vector3 position)
+        {
+            Vector3 currentPos = building.transform.position;
+            if (Vector3.Distance(currentPos, position) > 1f)
+            {
+                building.transform.position = position;
+                Debug.Log($"[UnitSpawner] Moved {building.name} to {position}");
+            }
+        }
+
+        [Server]
+        private static void CreateRuntimeBuilding(string name, BuildingType type, Vector3 position, int teamId, Vector3 scale)
+        {
+            GameObject buildingObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            buildingObject.name = name;
+            buildingObject.transform.position = position;
+            buildingObject.transform.localScale = scale;
+
+            Collider collider = buildingObject.GetComponent<Collider>();
+            if (collider != null) collider.isTrigger = false;
+
+            if (buildingObject.GetComponent<NetworkIdentity>() == null)
+                buildingObject.AddComponent<NetworkIdentity>();
+
+            Building building = buildingObject.AddComponent<Building>();
+            building.ConfigureRuntimeBuilding(name, type, teamId);
+
+            NetworkConnectionToClient owner = FindTeamConnection(teamId);
+            if (owner != null) NetworkServer.Spawn(buildingObject, owner);
+            else NetworkServer.Spawn(buildingObject);
         }
 
         [Server]
@@ -99,13 +199,6 @@ namespace RealmCommander.Core
                     Debug.Log($"[UnitSpawner] Assigned ownership of {unit.name} to connection {owner.connectionId}");
                 }
             }
-
-            foreach (Hero hero in FindObjectsByType<Hero>(FindObjectsSortMode.None))
-            {
-                if (hero == null || hero.netIdentity.connectionToClient != null) continue;
-                NetworkConnectionToClient owner = FindTeamConnection(hero.TeamId);
-                if (owner != null) hero.netIdentity.AssignClientAuthority(owner);
-            }
         }
 
         [Server]
@@ -116,7 +209,7 @@ namespace RealmCommander.Core
                 NetworkPlayer player = connection.identity != null
                     ? connection.identity.GetComponent<NetworkPlayer>()
                     : null;
-                if (player != null && player.teamId == teamId)
+                if (player != null && player.TeamId == teamId)
                     return connection;
             }
 
@@ -130,16 +223,6 @@ namespace RealmCommander.Core
                 NetworkServer.Spawn(unit, owner);
             else
                 NetworkServer.Spawn(unit);
-        }
-
-        [Server]
-        private void SpawnHero(int team, Vector3 desiredPosition, NetworkConnectionToClient owner)
-        {
-            if (heroPrefab == null) return;
-            GameObject heroObject = Instantiate(heroPrefab, GetNavMeshPosition(desiredPosition), Quaternion.identity);
-            heroObject.name = team == 0 ? "CommanderHero_Team0" : "CommanderHero_Team1";
-            heroObject.GetComponent<Hero>()?.ConfigureTeam(team);
-            SpawnWithOwner(heroObject, owner);
         }
 
         private static Vector3 GetNavMeshPosition(Vector3 desiredPosition)

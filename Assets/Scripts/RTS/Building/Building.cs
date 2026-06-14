@@ -18,6 +18,11 @@ namespace RealmCommander.RTS
         [SerializeField] private float maxHealth = 500f;
         [SerializeField] private float constructionTime = 5f;
 
+        [Header("Combat")]
+        [SerializeField] private float attackDamage;
+        [SerializeField] private float attackRange = 5f;
+        [SerializeField] private float attackSpeed = 1.5f;
+
         [Header("Production")]
         [SerializeField] private List<UnitProductionData> productionQueue = new List<UnitProductionData>();
         [SerializeField] private float productionRange = 5f;
@@ -27,31 +32,71 @@ namespace RealmCommander.RTS
         [SerializeField] private Renderer buildingRenderer;
         [SerializeField] private Color buildingColor = Color.gray;
         [SerializeField] private Color selectedColor = Color.cyan;
+        [SerializeField] private global::RealmCommander.Visuals.WorldModelVisual worldVisual;
+        [SerializeField] private global::RealmCommander.Visuals.WorldHealthBar healthBar;
         private MaterialPropertyBlock colorBlock;
 
         [SyncVar(hook = nameof(OnHealthChanged))]
         private float currentHealth;
         [SyncVar(hook = nameof(OnTeamChanged))]
         [SerializeField, Range(0, 1)] private int teamId;
+        [SyncVar]
+        private bool syncIsConstructing;
+        [SyncVar]
+        private float syncConstructionProgress;
+        [SyncVar]
+        private string syncCurrentProductName = "";
+        [SyncVar]
+        private float syncProductionProgress;
         private bool isSelected;
         private bool isConstructing;
         private float constructionProgress;
         private Queue<UnitProductionData> currentProduction = new Queue<UnitProductionData>();
         private float productionTimer;
+        private float lastAttackTime;
 
         public string BuildingName => buildingName;
         public BuildingType BuildingType => buildingType;
         public float MaxHealth => maxHealth;
         public float CurrentHealth => currentHealth;
-        public float HealthPercent => currentHealth / maxHealth;
+        public float HealthPercent => maxHealth > 0f ? currentHealth / maxHealth : 0f;
         public bool IsAlive => currentHealth > 0;
         public bool IsSelected => isSelected;
-        public bool IsConstructing => isConstructing;
+        public bool IsConstructing => isServer ? isConstructing : syncIsConstructing;
         public bool IsProducing => currentProduction.Count > 0;
         public float ProductionRange => productionRange;
         public int TeamId => teamId;
         public bool CanIssueLocalCommands => !NetworkClient.active ||
-            (NetworkPlayer.Local != null && NetworkPlayer.Local.teamId == teamId);
+            (NetworkPlayer.Local != null && NetworkPlayer.Local.TeamId == teamId);
+
+        public float GetProductionProgress()
+        {
+            if (isServer)
+            {
+                if (currentProduction.Count == 0) return 0f;
+                var current = currentProduction.Peek();
+                return current.productionTime > 0f ? productionTimer / current.productionTime : 0f;
+            }
+            return syncProductionProgress;
+        }
+
+        public float GetProductionTimeRemaining()
+        {
+            if (isServer)
+            {
+                if (currentProduction.Count == 0) return 0f;
+                var current = currentProduction.Peek();
+                return Mathf.Max(0f, current.productionTime - productionTimer);
+            }
+            return 0f;
+        }
+
+        public string GetCurrentProductName()
+        {
+            return isServer
+                ? (currentProduction.Count > 0 ? currentProduction.Peek().unitName : "")
+                : syncCurrentProductName;
+        }
 
         public event Action<float, float> OnHealthChangedEvent;
         public event Action OnDeath;
@@ -62,12 +107,20 @@ namespace RealmCommander.RTS
 
         private void Awake()
         {
+            buildingRenderer ??= GetComponent<Renderer>();
+            EnsureDefaultProductionQueue();
+
             if (!NetworkClient.active)
             {
                 currentHealth = maxHealth;
             }
 
-            if (selectionIndicator != null)
+            if (selectionIndicator == null)
+            {
+                selectionIndicator = CreateSelectionIndicator();
+                selectionIndicator.SetActive(false);
+            }
+            else
             {
                 selectionIndicator.SetActive(false);
             }
@@ -79,56 +132,50 @@ namespace RealmCommander.RTS
             obstacle.carvingMoveThreshold = 0.1f;
 
             UpdateBuildingColor();
+            ApplyWorldArt();
+            EnsureHealthBar();
         }
 
         protected override void OnValidate() { }
+
+        private GameObject CreateSelectionIndicator()
+        {
+            GameObject indicatorObject = new GameObject("SelectionIndicator");
+            indicatorObject.transform.SetParent(transform, false);
+            indicatorObject.AddComponent<SelectionIndicator>();
+            return indicatorObject;
+        }
 
         public override void OnStartServer()
         {
             base.OnStartServer();
             currentHealth = maxHealth;
+            EnsureDefaultProductionQueue();
             if (connectionToClient != null && connectionToClient.identity != null)
             {
                 NetworkPlayer owner = connectionToClient.identity.GetComponent<NetworkPlayer>();
-                if (owner != null) teamId = owner.teamId;
-            }
-            else if (CompareTag("Enemy"))
-            {
-                teamId = 1;
+                if (owner != null) teamId = owner.TeamId;
             }
             UpdateBuildingColor();
         }
 
         private void Start()
         {
-            if (CanIssueLocalCommands)
-            {
-                SelectionManager.Instance?.RegisterSelectableUnit(gameObject);
-            }
-
-            if (CanIssueLocalCommands && CommandManager.Instance != null)
-            {
-                CommandManager.Instance.OnAttackCommand += HandleAttackCommand;
-            }
+            SelectionManager.Instance?.RegisterSelectableUnit(gameObject);
+            EntityRegistry.Instance?.Register(this);
         }
 
         private void OnDestroy()
         {
-            if (SelectionManager.Instance != null)
-            {
-                SelectionManager.Instance?.UnregisterSelectableUnit(gameObject);
-            }
-
-            if (CommandManager.Instance != null)
-            {
-                CommandManager.Instance.OnAttackCommand -= HandleAttackCommand;
-            }
+            EntityRegistry.Instance?.Unregister(this);
+            SelectionManager.Instance?.UnregisterSelectableUnit(gameObject);
         }
 
         private void Update()
         {
             if (!IsAlive) return;
-            if (NetworkClient.active && !isServer) return;
+            if (netIdentity == null) return;
+            if (NetworkClient.active && !isServer && !NetworkServer.active) return;
 
             if (isConstructing)
             {
@@ -139,16 +186,64 @@ namespace RealmCommander.RTS
             {
                 UpdateProduction();
             }
+
+            if (attackDamage > 0f && isServer)
+            {
+                AutoAttack();
+            }
+        }
+
+        [Server]
+        private void AutoAttack()
+        {
+            if (attackDamage <= 0f || Time.time - lastAttackTime < attackSpeed) return;
+
+            var registry = EntityRegistry.Instance;
+            if (registry == null) return;
+
+            float closestDist = attackRange;
+            GameObject closestTarget = null;
+
+            foreach (var unit in registry.AllUnits)
+            {
+                if (unit == null || !unit.IsAlive) continue;
+                if (unit.IsEnemy == (teamId == 1)) continue;
+                float dist = Vector3.Distance(transform.position, unit.transform.position);
+                if (dist < closestDist)
+                {
+                    closestDist = dist;
+                    closestTarget = unit.gameObject;
+                }
+            }
+
+            if (closestTarget != null)
+            {
+                lastAttackTime = Time.time;
+                var combat = Network.CombatManager.Instance;
+                if (combat != null)
+                {
+                    combat.ApplyCombatDamage(gameObject, closestTarget, attackDamage);
+                }
+                else
+                {
+                    var unit = closestTarget.GetComponent<Unit>();
+                    unit?.TakeDamage(attackDamage);
+                }
+            }
         }
 
         private void UpdateConstruction()
         {
             constructionProgress += Time.deltaTime;
+            syncConstructionProgress = constructionProgress;
 
             if (constructionProgress >= constructionTime)
             {
                 isConstructing = false;
+                syncIsConstructing = false;
                 constructionProgress = 0;
+                syncConstructionProgress = 0;
+                Audio.AudioManager.Instance?.PlayBuildingComplete();
                 Debug.Log($"{buildingName} 건설 완료!");
             }
         }
@@ -160,10 +255,26 @@ namespace RealmCommander.RTS
             productionTimer += Time.deltaTime;
             var currentItem = currentProduction.Peek();
 
+            syncCurrentProductName = currentItem.unitName;
+            syncProductionProgress = currentItem.productionTime > 0f ? productionTimer / currentItem.productionTime : 0f;
+
             if (productionTimer >= currentItem.productionTime)
             {
                 productionTimer = 0;
                 currentProduction.Dequeue();
+
+                if (currentProduction.Count > 0)
+                {
+                    var next = currentProduction.Peek();
+                    syncCurrentProductName = next.unitName;
+                    syncProductionProgress = 0f;
+                }
+                else
+                {
+                    syncCurrentProductName = "";
+                    syncProductionProgress = 0f;
+                }
+
                 if (isServer)
                 {
                     ProduceUnit(currentItem);
@@ -179,7 +290,11 @@ namespace RealmCommander.RTS
             isSelected = selected;
             if (selectionIndicator != null)
             {
-                selectionIndicator.SetActive(selected);
+                SelectionIndicator indicator = selectionIndicator.GetComponent<SelectionIndicator>();
+                if (indicator != null)
+                    indicator.SetSelected(selected);
+                else
+                    selectionIndicator.SetActive(selected);
             }
 
             if (selected)
@@ -217,7 +332,9 @@ namespace RealmCommander.RTS
         public void StartConstruction()
         {
             isConstructing = true;
+            syncIsConstructing = true;
             constructionProgress = 0;
+            syncConstructionProgress = 0;
         }
 
         [Command]
@@ -229,7 +346,7 @@ namespace RealmCommander.RTS
 
         public void QueueProduction(UnitProductionData data)
         {
-            if (isServer)
+            if (isServer || NetworkServer.active)
             {
                 InternalQueueProduction(data);
             }
@@ -254,6 +371,13 @@ namespace RealmCommander.RTS
             }
 
             currentProduction.Enqueue(data);
+
+            if (currentProduction.Count == 1)
+            {
+                syncCurrentProductName = data.unitName;
+                syncProductionProgress = 0f;
+            }
+
             OnProductionStarted?.Invoke(data);
             RpcOnProductionStarted(data.unitName);
 
@@ -285,6 +409,9 @@ namespace RealmCommander.RTS
             Unit unitComponent = unit.GetComponent<Unit>();
             unitComponent?.ConfigureTeam(teamId == 1);
 
+            if (!string.IsNullOrEmpty(data.specId) && unitComponent != null)
+                unitComponent.ApplySpec(data.specId);
+
             NetworkConnectionToClient owner = FindTeamConnection(teamId);
             if (owner != null) NetworkServer.Spawn(unit, owner);
             else NetworkServer.Spawn(unit);
@@ -292,6 +419,7 @@ namespace RealmCommander.RTS
             RpcOnUnitSpawned(spawnPosition);
 
             Debug.Log($"{data.unitName} 생산 완료!");
+            Audio.AudioManager.Instance?.PlayUnitSpawn();
         }
 
         [ClientRpc]
@@ -308,17 +436,6 @@ namespace RealmCommander.RTS
             spawnPos.y = 0.5f;
 
             return spawnPos;
-        }
-
-        private void HandleAttackCommand(GameObject target)
-        {
-            if (!CanIssueLocalCommands) return;
-            if (SelectionManager.Instance == null || !SelectionManager.Instance.IsUnitSelected(gameObject)) return;
-
-            if (target != null && target == gameObject)
-            {
-                Debug.Log("건물은 공격할 수 없습니다!");
-            }
         }
 
         private void OnHealthChanged(float oldValue, float newValue)
@@ -349,7 +466,7 @@ namespace RealmCommander.RTS
         private System.Collections.IEnumerator DestroyAfterFrame()
         {
             yield return null;
-            if (gameObject != null)
+            if (gameObject != null && NetworkServer.active)
                 NetworkServer.Destroy(gameObject);
         }
 
@@ -373,17 +490,61 @@ namespace RealmCommander.RTS
             ApplyBuildingColor(teamId == 1 ? Color.red : buildingColor);
         }
 
+        private void ApplyWorldArt()
+        {
+            worldVisual ??= GetComponent<global::RealmCommander.Visuals.WorldModelVisual>();
+            if (worldVisual == null)
+                worldVisual = gameObject.AddComponent<global::RealmCommander.Visuals.WorldModelVisual>();
+
+            worldVisual.ApplyBuilding(buildingType, teamId == 1);
+        }
+
+        private void EnsureHealthBar()
+        {
+            healthBar ??= GetComponent<global::RealmCommander.Visuals.WorldHealthBar>();
+            if (healthBar == null)
+                healthBar = gameObject.AddComponent<global::RealmCommander.Visuals.WorldHealthBar>();
+            healthBar.SetLayout(new Vector3(0f, 2.25f, 0f), new Vector2(1.6f, 0.11f));
+        }
+
         [Server]
         public void ConfigureTeam(int newTeamId)
         {
             teamId = Mathf.Clamp(newTeamId, 0, 1);
-            gameObject.tag = teamId == 1 ? "Enemy" : "Untagged";
+            if (currentHealth <= 0f)
+                currentHealth = maxHealth;
             UpdateBuildingColor();
+            ApplyWorldArt();
+        }
+
+        [Server]
+        public void ConfigureRuntimeBuilding(string newName, BuildingType newType, int newTeamId)
+        {
+            buildingName = string.IsNullOrWhiteSpace(newName) ? newType.ToString() : newName;
+            buildingType = newType;
+            if (buildingType != BuildingType.Base && buildingType != BuildingType.Barracks && buildingType != BuildingType.RangedBarracks)
+                productionQueue.Clear();
+            ConfigureTeam(newTeamId);
+            EnsureDefaultProductionQueue();
+        }
+
+        [Server]
+        public void ApplySpec(string specId)
+        {
+            var spec = OpenSpec.SpecManager.Instance?.GetSpec("buildings", specId);
+            if (spec == null) return;
+
+            maxHealth = OpenSpec.SpecManager.Instance.GetProperty("buildings", specId, "MaxHealth", maxHealth);
+            constructionTime = OpenSpec.SpecManager.Instance.GetProperty("buildings", specId, "BuildTime", constructionTime);
+            currentHealth = maxHealth;
+
+            Debug.Log($"[Building] Applied spec '{specId}': HP={maxHealth}, BuildTime={constructionTime}");
         }
 
         private void OnTeamChanged(int oldValue, int newValue)
         {
             UpdateBuildingColor();
+            ApplyWorldArt();
         }
 
         [Server]
@@ -394,7 +555,7 @@ namespace RealmCommander.RTS
                 NetworkPlayer player = connection.identity != null
                     ? connection.identity.GetComponent<NetworkPlayer>()
                     : null;
-                if (player != null && player.teamId == requestedTeamId)
+                if (player != null && player.TeamId == requestedTeamId)
                     return connection;
             }
             return null;
@@ -405,16 +566,14 @@ namespace RealmCommander.RTS
             if (!CanIssueLocalCommands || SelectionManager.Instance == null) return;
             if (RTS.BoxSelector.WasClickHandled) return;
 
-            if (Input.GetKey(KeyCode.LeftShift))
+            bool additive = Input.GetKey(KeyCode.LeftShift) || MobileRTSInput.AdditiveSelectionActive;
+
+            if (additive)
             {
                 if (isSelected)
-                {
                     SelectionManager.Instance.RemoveFromSelection(gameObject);
-                }
                 else
-                {
                     SelectionManager.Instance.AddToSelection(gameObject);
-                }
             }
             else
             {
@@ -426,12 +585,65 @@ namespace RealmCommander.RTS
         {
             return productionQueue;
         }
+
+        private void EnsureDefaultProductionQueue()
+        {
+            if (productionQueue == null)
+                productionQueue = new List<UnitProductionData>();
+            if (productionQueue.Count > 0) return;
+
+            if (buildingType == BuildingType.DefenseTower)
+            {
+                attackDamage = 15f;
+                attackRange = 6f;
+                attackSpeed = 1.5f;
+                return;
+            }
+
+            if (buildingType != BuildingType.Base && buildingType != BuildingType.Barracks && buildingType != BuildingType.RangedBarracks) return;
+
+            GameObject unitPrefab = Resources.Load<GameObject>("Unit");
+            if (unitPrefab == null) return;
+
+            productionQueue.Add(new UnitProductionData
+            {
+                unitName = "Soldier",
+                specId = "unit_soldier",
+                unitPrefab = unitPrefab,
+                productionTime = 3f,
+                goldCost = 45f,
+                manaCost = 0f
+            });
+
+            if (buildingType == BuildingType.Barracks || buildingType == BuildingType.RangedBarracks)
+            {
+                productionQueue.Add(new UnitProductionData
+                {
+                    unitName = "Archer",
+                    specId = "unit_archer",
+                    unitPrefab = unitPrefab,
+                    productionTime = 4f,
+                    goldCost = 65f,
+                    manaCost = 5f
+                });
+                productionQueue.Add(new UnitProductionData
+                {
+                    unitName = "Mage",
+                    specId = "unit_mage",
+                    unitPrefab = unitPrefab,
+                    productionTime = 5f,
+                    goldCost = 80f,
+                    manaCost = 20f
+                });
+            }
+        }
     }
 
     [Serializable]
     public class UnitProductionData
     {
         public string unitName;
+        public string specId;
         public GameObject unitPrefab;
         public float productionTime = 3f;
         public float goldCost = 50f;

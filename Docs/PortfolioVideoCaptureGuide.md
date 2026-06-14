@@ -2,110 +2,68 @@
 
 ## 영상 구성 (60~90초)
 
-### 1. MainMenu와 Host/Client Lobby 연결 (0~8초)
+### 1. MainMenu와 Lobby 연결 (0~8초)
 - MainMenuScene에서 게임 시작
 - Host/Client 선택 화면
-- 네트워크 연결 상태 표시
+- 연결 주소와 상태 표시
 
-### 2. 팀별 유닛 선택과 이동 명령 (8~20초)
-- 팀 0 유닛 선택
-- 팀 1 유닛 선택
-- 각 팀의 유닛을 서로 다른 위치로 이동 명령
+### 2. Host/Client 접속 확인 (8~20초)
+- Host 프로세스와 Client 프로세스를 나란히 표시
+- `team 0/1` 배정 확인
+- 각 플레이어가 자기 팀 유닛만 제어하는 장면 표시
 
-### 3. Client 명령 동기화 (20~35초)
-- Client에서 명령 실행
-- Host 화면에서 동기화 확인
-- 실시간 위치 업데이트 확인
+### 3. 양측 유닛 선택과 이동 (20~38초)
+- 팀 0 유닛 선택 후 이동
+- 팀 1 유닛 선택 후 이동
+- Host와 Client 화면에서 위치 동기화 확인
 
-### 4. Commander Hero 선택과 Arc Strike (35~50초)
-- Commander Hero 선택
-- 적 유닛을 대상으로 Arc Strike 사용
-- 스킬 효과 및 데미지 표시
+### 4. 전투와 서버 권한 데미지 (38~56초)
+- 적 유닛 우클릭 공격 명령
+- 사거리 접근 후 공격
+- HP 변화와 사망/전투 결과 표시
 
-### 5. Rally Heal과 마나/cooldown UI (50~62초)
-- Hero 피해 상태 확인
-- Rally Heal 사용으로 회복
-- 마나/cooldown UI 업데이트 확인
+### 5. 건물과 생산 루프 (56~72초)
+- 건물 선택 정보 표시
+- 생산 큐 또는 유닛 생성 장면
+- 팀별 Gold/Mana 분리 표시
 
-### 6. 건물 또는 전투 장면과 서버 권한 설명 (62~75초)
-- 건물 선택 및 정보 표시
-- 전투 장면 (서버 권한 데미지)
-- 네트워크 동기화 상태
-
-### 7. 기술 스택 및 자동 smoke PASS 로그 (75~90초)
-- 사용 기술 스택 표시 (Unity, Mirror, etc.)
-- 자동 smoke 테스트 PASS 로그 캡처
-- 프로젝트 완료 상태 요약
+### 6. 검증 로그와 기술 요약 (72~90초)
+- 자동 smoke PASS 로그 캡처
+- Unity, Mirror, Telepathy TCP, NavMesh, UGUI 요약
 
 ## 촬영 체크리스트
 
-### 준비물
-- [ ] Windows Development Build 완료
-- [ ] Host/Client 독립 프로세스 실행 가능
-- [ ] 포트폴리오 폴더 준비
+- [ ] Windows Development Build 생성
+- [ ] Host/Client 독립 프로세스 실행
+- [ ] 로비 연결 확인
+- [ ] 팀별 소유권 확인
+- [ ] 양측 이동 동기화 확인
+- [ ] 전투 및 HP 변화 확인
+- [ ] 건물/생산 루프 확인
+- [ ] smoke PASS 로그 캡처
 
-### 촬영 환경
-- [ ] 해상도: 1920x1080 (권장)
-- [ ] 프레임: 60fps
-- [ ] 녹화 소프트웨어: OBS Studio 또는 Windows Game Bar
+## 권장 저장 경로
 
-### 촬영 순서
-1. MainMenuScene 시작
-2. Host 프로세스 실행
-3. Client 프로세스 실행
-4. 네트워크 연결 확인
-5. 유닛 선택 및 이동 명령
-6. Hero 선택 및 스킬 사용
-7. 전체 gameplay 녹화
-8. 로그 캡처
-
-## 파일 저장
-
-### 권장 경로
-- `Portfolio/Video/RealmCommander_1v1_VerticalSlice.mp4`
+- `Portfolio/Video/RealmCommander_1v1_RTS_VerticalSlice.mp4`
 - `Portfolio/Video/RealmCommander_SmokeTest_Log.txt`
 
-### README 업데이트
-- YouTube 또는 Google Drive 공개 링크 추가
-- 영상 설명 포함
+## 필수 PASS 문자열
 
-## 자동 smoke 테스트 로그
-
-### 필수 PASS 문자열
 - `[PortfolioBuild] PASS`
 - `RESOURCE_ISOLATION_PASS`
-- `HERO_SKILLS_PASS heroes=2`
 - `HOST_MOVE_PASS`
 - `CLIENT_PASS`
 - `HOST_PASS`
 
-### 로그 캡처 방법
+## 재현 명령
+
 ```powershell
-# Windows build 실행
 & 'C:\Program Files\Unity\Hub\Editor\6000.3.11f1\Editor\Unity.exe' `
   -batchmode -quit `
-  -projectPath 'C:\Users\admin\Unity\RealmCommander' `
+  -projectPath 'C:\Users\kjunw\Unity\RealmCommander' `
   -executeMethod RealmCommander.Editor.PortfolioBuildUtility.BuildWindowsPortfolioPlayer `
   -logFile 'Logs\FinalPortfolioBuild.log'
 
-# Host 실행
 Builds\Windows\RealmCommander.exe -batchmode --rc-smoke-host --rc-timeout=60 -logFile Logs\FinalHost.log
-
-# Client 실행
 Builds\Windows\RealmCommander.exe -batchmode --rc-smoke-client --rc-address=127.0.0.1 --rc-timeout=60 -logFile Logs\FinalClient.log
 ```
-
-## 편집 가이드
-
-### 영상 편집 포인트
-- 각 섹션 간 자연스러운 전환
-- 중요 기능 하이라이트
-- 텍스트 오버레이로 기능 설명
-- 배경 음악 선택 (선택사항)
-
-### 최종 확인
-- [ ] 전체 영상 길이: 60~90초
-- [ ] 모든 핵심 기능 표시
-- [ ] 텍스트 설명 명확
-- [ ] 화면 품질 양호
-- [ ] 로그 PASS 표시

@@ -26,6 +26,12 @@ namespace RealmCommander.UI
         private Unit observedUnit;
         private Building observedBuilding;
 
+        private void Awake()
+        {
+            AutoWireReferences();
+            PolishLayout();
+        }
+
         private void Start()
         {
             if (SelectionManager.Instance != null)
@@ -41,6 +47,72 @@ namespace RealmCommander.UI
 
             UpdateResourceUI(0, 0);
             UpdateSelectionUI(new List<GameObject>());
+        }
+
+        private void AutoWireReferences()
+        {
+            goldText ??= FindComponentInChildren<TextMeshProUGUI>("GoldText");
+            manaText ??= FindComponentInChildren<TextMeshProUGUI>("ManaText");
+            gameSpeedText ??= FindComponentInChildren<TextMeshProUGUI>("SpeedText");
+
+            selectionPanel ??= GameObject.Find("Selection_Panel");
+            if (selectionPanel != null)
+            {
+                selectionCountText ??= FindComponentInChildren<TextMeshProUGUI>(selectionPanel.transform, "SelectionCountText");
+                healthBar ??= FindComponentInChildren<Slider>(selectionPanel.transform, "HealthBar");
+                unitInfoText ??= FindComponentInChildren<TextMeshProUGUI>(selectionPanel.transform, "UnitInfoText");
+            }
+
+            WireButton("PauseButton", OnPauseButton);
+            WireButton("SpeedUpButton", OnSpeedUpButton);
+            WireButton("SpeedDownButton", OnSpeedDownButton);
+        }
+
+        private T FindComponentInChildren<T>(string objectName) where T : Component
+        {
+            return FindComponentInChildren<T>(transform, objectName);
+        }
+
+        private static T FindComponentInChildren<T>(Transform root, string objectName) where T : Component
+        {
+            if (root == null) return null;
+            foreach (T component in root.GetComponentsInChildren<T>(true))
+            {
+                if (component != null && component.gameObject.name == objectName)
+                    return component;
+            }
+
+            return null;
+        }
+
+        private void WireButton(string objectName, UnityEngine.Events.UnityAction action)
+        {
+            Button button = FindComponentInChildren<Button>(objectName);
+            if (button == null) return;
+            button.onClick.RemoveListener(action);
+            button.onClick.AddListener(action);
+        }
+
+        private void PolishLayout()
+        {
+            Image panel = GetComponent<Image>();
+            if (panel != null)
+                panel.color = new Color(0.06f, 0.08f, 0.1f, 0.42f);
+
+            SetText("PauseButton", "Pause");
+            SetText("SpeedUpButton", "+");
+            SetText("SpeedDownButton", "-");
+
+            if (goldText != null) goldText.fontSize = 18f;
+            if (manaText != null) manaText.fontSize = 18f;
+            if (gameSpeedText != null) gameSpeedText.fontSize = 16f;
+        }
+
+        private void SetText(string objectName, string value)
+        {
+            TextMeshProUGUI text = FindComponentInChildren<TextMeshProUGUI>(GameObject.Find(objectName)?.transform, "Text");
+            if (text != null)
+                text.text = value;
         }
 
         private void OnDestroy()

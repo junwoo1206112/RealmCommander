@@ -1,0 +1,48 @@
+[Licensing::Module] Trying to connect to existing licensing client channel...
+Built from '6000.3/staging' branch; Version is '6000.3.11f1 (3000ef702840) revision 3145967'; Using compiler version '194234433'; Build Type 'Release'
+OS: 'Windows 11  (10.0.26200) Professional' Language: 'ko' Physical Memory: 16163 MB
+[Licensing::IpcConnector] Successfully connected to: "LicenseClient-kjunw" at "2026-06-14T11:21:09.0939431Z"
+BatchMode: 1, IsHumanControllingUs: 0, StartBugReporterOnCrash: 0, Is64bit: 1
+System  architecture: x64
+Process architecture: x64
+Date: 2026-06-14T11:21:09Z
+[Licensing::Client] Error: HandshakeResponse reported an error:
+	ResponseCode: 505
+	ResponseStatus: Unsupported protocol version '1.18.0'.
+[Licensing::Module] Error: Failed to handshake to channel: "LicenseClient-kjunw"
+[Licensing::IpcConnector] LicenseClient-kjunw channel disconnected successfully.
+[Licensing::IpcConnector] Successfully connected to: "LicenseClient-kjunw-6000.3.11" at "2026-06-14T11:21:10.0821368Z"
+[Licensing::Client] Handshaking with LicensingClient:
+  Version:                 1.18.0+23225a6
+  Session Id:              e6a64f74b4fa4017bfc786a23f285da0
+  Correlation Id:          1b2de512d577e7433b92116e4f46944a
+  External correlation Id: 8842675918928696146
+  Machine Id:              j7wbd2ySXeFV7M4bYzfRZvYYBYw=
+[Licensing::Module] Successfully connected to LicensingClient on channel: "LicenseClient-kjunw-6000.3.11" (connect: 0.00s, validation: 0.00s, handshake: 0.19s)
+[Licensing::IpcConnector] Successfully connected to: "LicenseClient-kjunw-6000.3.11-notifications" at "2026-06-14T11:21:10.2722279Z"
+[Licensing::Module] Error: Access token is unavailable; failed to update
+[Licensing::Client] Successfully resolved entitlement details
+[Licensing::Module] License group:
+  Id: 14569694789409-UnityPersXXXX
+  Product: Unity Personal
+  Type: Assigned
+  Expiration: Unlimited
+[Licensing::Client] Successfully updated license, isAsync: True, time: 0.00
+[Licensing::Client] Successfully resolved entitlement details
+[Licensing::Module] Licensing Background thread has ended after 1.19s
+Assertion failed on expression: 'SUCCEEDED(hr)'
+Assertion failed on expression: 'SUCCEEDED(hr)'
+
+COMMAND LINE ARGUMENTS:
+C:\Program Files\Unity\Hub\Editor\6000.3.11f1\Editor\Unity.exe
+-batchmode
+-quit
+-projectPath
+C:\Users\kjunw\Unity\RealmCommander
+-logFile
+C:\Users\kjunw\Unity\RealmCommander\UnityHeroRemovalValidation.log
+Successfully changed project path to: C:\Users\kjunw\Unity\RealmCommander
+C:/Users/kjunw/Unity/RealmCommander
+DisplayDialog: Project folder or disk is read only Please move the project folder somewhere readable and writable.
+This should not be called in batch mode.
+Exiting without the bug reporter. Application will terminate with return code 1

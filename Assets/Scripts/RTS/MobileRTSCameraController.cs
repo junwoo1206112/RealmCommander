@@ -5,22 +5,22 @@ namespace RealmCommander.RTS
     public class MobileRTSCameraController : MonoBehaviour
     {
         [Header("View")]
-        [SerializeField, Range(10f, 80f)] private float cameraPitch = 75f;
+        [SerializeField, Range(10f, 80f)] private float cameraPitch = 58f;
 
         [Header("Pan")]
         [SerializeField] private float panSensitivity = 0.005f;
         [SerializeField] private float keyboardPanSpeed = 20f;
-        [SerializeField] private Vector2 xBounds = new Vector2(-45f, 45f);
-        [SerializeField] private Vector2 zBounds = new Vector2(-45f, 45f);
+        [SerializeField] private Vector2 xBounds = new Vector2(-24f, 24f);
+        [SerializeField] private Vector2 zBounds = new Vector2(-18f, 18f);
 
         [Header("Zoom / Height")]
         [SerializeField] private float zoomSensitivity = 0.004f;
         [SerializeField] private float scrollZoomSpeed = 5f;
-        [SerializeField] private Vector2 heightBounds = new Vector2(15f, 60f);
+        [SerializeField] private Vector2 heightBounds = new Vector2(10f, 42f);
 
         [Header("FOV Zoom")]
-        [SerializeField] private float fovMin = 50f;
-        [SerializeField] private float fovMax = 75f;
+        [SerializeField] private float fovMin = 45f;
+        [SerializeField] private float fovMax = 66f;
 
         [Header("Rotation")]
         [SerializeField] private float rotateSensitivity = 0.3f;
@@ -53,7 +53,7 @@ namespace RealmCommander.RTS
             targetYaw = yaw;
             targetPosition = transform.position;
             if (targetPosition.y < heightBounds.x || targetPosition.y > heightBounds.y)
-                targetPosition.y = 35f;
+                targetPosition.y = 24f;
             ApplyRotation();
             ApplyFov(targetPosition.y);
             Debug.Log($"[Camera] Init pos={targetPosition}, yaw={yaw}, pitch={cameraPitch}");
@@ -112,11 +112,17 @@ namespace RealmCommander.RTS
             ClampPosition();
         }
 
-        private void OnGUI()
+        public void FocusOn(Vector3 worldPosition, float height = 22f)
         {
-            if (!enabled) return;
-            GUI.Label(new Rect(10, Screen.height - 60, 400, 20),
-                $"Camera: pos={transform.position:F1} yaw={yaw:F0} pitch={cameraPitch:F0}");
+            targetPosition = new Vector3(
+                Mathf.Clamp(worldPosition.x, xBounds.x, xBounds.y),
+                Mathf.Clamp(height, heightBounds.x, heightBounds.y),
+                Mathf.Clamp(worldPosition.z - 7f, zBounds.x, zBounds.y));
+            transform.position = targetPosition;
+            targetYaw = 0f;
+            yaw = targetYaw;
+            ApplyRotation();
+            ApplyFov(targetPosition.y);
         }
 
         private void HandleMobileInput()

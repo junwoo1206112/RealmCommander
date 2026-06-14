@@ -1,0 +1,23 @@
+{
+    "name": "RealmCommander.Scripts.Editor",
+    "rootNamespace": "RealmCommander.Editor",
+    "references": [
+        "RealmCommander.Scripts",
+        "Mirror",
+        "Mirror.Transports",
+        "Telepathy",
+        "Unity.AI.Navigation",
+        "Unity.TextMeshPro"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

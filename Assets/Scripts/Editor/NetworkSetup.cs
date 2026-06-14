@@ -33,24 +33,25 @@ namespace RealmCommander.Editor
         private static void CreateNetworkManager()
         {
             GameObject networkManager = GameObject.Find("NetworkManager");
+            bool createdNetworkManager = networkManager == null;
             if (networkManager == null)
             {
                 networkManager = new GameObject("NetworkManager");
             }
 
-            var manager = networkManager.GetComponent<NetworkManager>();
+            var manager = networkManager.GetComponent<RealmCommanderNetworkManager>();
             if (manager == null)
             {
-                manager = networkManager.AddComponent<NetworkManager>();
+                var genericManager = networkManager.GetComponent<NetworkManager>();
+                if (genericManager != null)
+                {
+                    Undo.DestroyObjectImmediate(genericManager);
+                }
+
+                manager = networkManager.AddComponent<RealmCommanderNetworkManager>();
             }
 
             manager.networkAddress = "localhost";
-
-            var identity = networkManager.GetComponent<NetworkIdentity>();
-            if (identity == null)
-            {
-                identity = networkManager.AddComponent<NetworkIdentity>();
-            }
 
             var transport = networkManager.GetComponent<Transport>();
             if (transport == null)
@@ -59,10 +60,12 @@ namespace RealmCommander.Editor
             }
 
             manager.transport = transport;
+            ConfigureNetworkPrefabs(manager);
 
-            Undo.RegisterCreatedObjectUndo(networkManager, "Create NetworkManager");
+            if (createdNetworkManager)
+                Undo.RegisterCreatedObjectUndo(networkManager, "Create NetworkManager");
 
-            manager.onlineScene = "Assets/Scenes/LobbyScene.unity";
+            manager.onlineScene = "Assets/Scenes/MainScene.unity";
             manager.offlineScene = "Assets/Scenes/MainMenuScene.unity";
 
             Debug.Log("NetworkManager 생성 완료");
@@ -70,19 +73,45 @@ namespace RealmCommander.Editor
 
         private static void CreateManagers()
         {
-            GameObject networkGameManager = new GameObject("NetworkGameManager");
-            networkGameManager.AddComponent<NetworkGameManager>();
-            Undo.RegisterCreatedObjectUndo(networkGameManager, "Create NetworkGameManager");
+            if (Object.FindFirstObjectByType<NetworkGameManager>() == null)
+            {
+                GameObject networkGameManager = new GameObject("NetworkGameManager");
+                networkGameManager.AddComponent<NetworkGameManager>();
+                Undo.RegisterCreatedObjectUndo(networkGameManager, "Create NetworkGameManager");
+            }
 
-            GameObject lobbyManager = new GameObject("LobbyManager");
-            lobbyManager.AddComponent<LobbyManager>();
-            Undo.RegisterCreatedObjectUndo(lobbyManager, "Create LobbyManager");
+            if (Object.FindFirstObjectByType<LobbyManager>() == null)
+            {
+                GameObject lobbyManager = new GameObject("LobbyManager");
+                lobbyManager.AddComponent<LobbyManager>();
+                Undo.RegisterCreatedObjectUndo(lobbyManager, "Create LobbyManager");
+            }
 
-            GameObject combatManager = new GameObject("CombatManager");
-            combatManager.AddComponent<CombatManager>();
-            Undo.RegisterCreatedObjectUndo(combatManager, "Create CombatManager");
+            if (Object.FindFirstObjectByType<CombatManager>() == null)
+            {
+                GameObject combatManager = new GameObject("CombatManager");
+                combatManager.AddComponent<CombatManager>();
+                Undo.RegisterCreatedObjectUndo(combatManager, "Create CombatManager");
+            }
 
             Debug.Log("네트워크 매니저 생성 완료");
+        }
+
+        private static void ConfigureNetworkPrefabs(NetworkManager manager)
+        {
+            GameObject playerPrefab = Resources.Load<GameObject>("Player");
+            if (playerPrefab != null)
+                manager.playerPrefab = playerPrefab;
+
+            manager.autoCreatePlayer = true;
+
+            AddSpawnPrefab(manager, Resources.Load<GameObject>("Unit"));
+        }
+
+        private static void AddSpawnPrefab(NetworkManager manager, GameObject prefab)
+        {
+            if (prefab != null && !manager.spawnPrefabs.Contains(prefab))
+                manager.spawnPrefabs.Add(prefab);
         }
 
         [MenuItem("Tools/Realm Commander/Create Menu Scenes")]

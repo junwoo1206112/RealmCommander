@@ -19,9 +19,13 @@ namespace RealmCommander.RTS
         private int activeFingerId = -1;
         private bool isDragging;
         private bool startedOverUi;
+        private float touchStartTime;
 
         public static bool TouchControlsActive => Application.isMobilePlatform && Input.touchSupported;
         public static bool EditorSimulationActive { get; private set; }
+        public static bool AdditiveSelectionActive { get; private set; }
+
+        private const float LongPressThreshold = 0.4f;
 
         private void Awake()
         {
@@ -97,6 +101,7 @@ namespace RealmCommander.RTS
             activeFingerId = fingerId;
             touchStartPosition = position;
             touchCurrentPosition = position;
+            touchStartTime = Time.time;
             isDragging = false;
             startedOverUi = IsPointerOverUi(fingerId);
         }
@@ -104,7 +109,13 @@ namespace RealmCommander.RTS
         private void UpdateGesture(Vector2 position)
         {
             touchCurrentPosition = position;
-            isDragging = Vector2.Distance(touchStartPosition, touchCurrentPosition) >= dragThreshold;
+            float distance = Vector2.Distance(touchStartPosition, touchCurrentPosition);
+            isDragging = distance >= dragThreshold;
+
+            if (!isDragging && Time.time - touchStartTime >= LongPressThreshold)
+            {
+                AdditiveSelectionActive = true;
+            }
         }
 
         private void EndGesture(Vector2 position)
@@ -129,13 +140,15 @@ namespace RealmCommander.RTS
         {
             if (mainCamera == null || SelectionManager.Instance == null) return;
 
+            bool additive = Input.GetKey(KeyCode.LeftShift) || AdditiveSelectionActive;
+
             Ray ray = mainCamera.ScreenPointToRay(screenPosition);
             if (Physics.Raycast(ray, out RaycastHit hit, 1000f, raycastMask))
             {
                 Unit unit = hit.collider.GetComponentInParent<Unit>();
                 if (unit != null && unit.CanIssueLocalCommands)
                 {
-                    if (Input.GetKey(KeyCode.LeftShift))
+                    if (additive)
                     {
                         if (SelectionManager.Instance.IsUnitSelected(unit.gameObject))
                             SelectionManager.Instance.RemoveFromSelection(unit.gameObject);
@@ -156,7 +169,7 @@ namespace RealmCommander.RTS
                 }
             }
 
-            if (!Input.GetKey(KeyCode.LeftShift))
+            if (!additive)
             {
                 SelectionManager.Instance.ClearSelection();
             }
@@ -182,6 +195,7 @@ namespace RealmCommander.RTS
             activeFingerId = -1;
             isDragging = false;
             startedOverUi = false;
+            AdditiveSelectionActive = false;
         }
 
         private void OnGUI()

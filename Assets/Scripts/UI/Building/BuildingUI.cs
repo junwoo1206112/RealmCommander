@@ -19,6 +19,12 @@ namespace RealmCommander.UI
         [SerializeField] private Transform productionContent;
         [SerializeField] private ProductionButtonUI productionButtonPrefab;
 
+        [Header("Production Progress")]
+        [SerializeField] private GameObject productionProgressPanel;
+        [SerializeField] private TextMeshProUGUI productionNameText;
+        [SerializeField] private Slider productionProgressBar;
+        [SerializeField] private TextMeshProUGUI productionTimeText;
+
         private ProductionButtonUI[] productionButtons;
 
         private void Start()
@@ -27,6 +33,8 @@ namespace RealmCommander.UI
                 SelectionManager.Instance.OnSelectionChanged += UpdateSelection;
             if (buildingPanel != null)
                 buildingPanel.SetActive(false);
+            if (productionProgressPanel != null)
+                productionProgressPanel.SetActive(false);
         }
 
         private void OnDestroy()
@@ -40,6 +48,7 @@ namespace RealmCommander.UI
         private void Update()
         {
             UpdateBuildingInfo();
+            UpdateProductionProgress();
         }
 
         private void UpdateSelection(System.Collections.Generic.List<GameObject> selected)
@@ -47,6 +56,7 @@ namespace RealmCommander.UI
             if (selected == null || selected.Count == 0)
             {
                 if (buildingPanel != null) buildingPanel.SetActive(false);
+                if (productionProgressPanel != null) productionProgressPanel.SetActive(false);
                 selectedBuilding = null;
                 ClearProductionButtons();
                 return;
@@ -65,6 +75,7 @@ namespace RealmCommander.UI
             }
 
             if (buildingPanel != null) buildingPanel.SetActive(false);
+            if (productionProgressPanel != null) productionProgressPanel.SetActive(false);
             selectedBuilding = null;
             ClearProductionButtons();
         }
@@ -86,6 +97,38 @@ namespace RealmCommander.UI
             if (healthText != null)
             {
                 healthText.text = $"HP: {Mathf.FloorToInt(selectedBuilding.CurrentHealth)}/{Mathf.FloorToInt(selectedBuilding.MaxHealth)}";
+            }
+        }
+
+        private void UpdateProductionProgress()
+        {
+            if (selectedBuilding == null || productionProgressPanel == null) return;
+
+            if (selectedBuilding.IsProducing)
+            {
+                productionProgressPanel.SetActive(true);
+
+                if (productionNameText != null)
+                {
+                    string productName = selectedBuilding.GetCurrentProductName();
+                    productionNameText.text = string.IsNullOrEmpty(productName) ? "Producing..." : $"Producing: {productName}";
+                }
+
+                if (productionProgressBar != null)
+                {
+                    float progress = selectedBuilding.GetProductionProgress();
+                    productionProgressBar.value = progress;
+                }
+
+                if (productionTimeText != null)
+                {
+                    float remaining = selectedBuilding.GetProductionTimeRemaining();
+                    productionTimeText.text = $"{remaining:F1}s";
+                }
+            }
+            else
+            {
+                productionProgressPanel.SetActive(false);
             }
         }
 
@@ -158,6 +201,12 @@ namespace RealmCommander.UI
             if (iconImage != null && data.icon != null)
             {
                 iconImage.sprite = data.icon;
+            }
+            else if (iconImage != null)
+            {
+                iconImage.sprite = !string.IsNullOrWhiteSpace(data.specId)
+                    ? ArtAssetLookup.LoadUnitIcon(data.specId)
+                    : ArtAssetLookup.LoadUnitIcon(data.unitName);
             }
 
             if (produceButton != null)

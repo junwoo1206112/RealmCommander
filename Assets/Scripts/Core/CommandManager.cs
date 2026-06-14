@@ -39,6 +39,7 @@ namespace RealmCommander.Core
 
             MoveMarker.Spawn(destination, false);
             OnMoveCommand?.Invoke(destination);
+            Audio.AudioManager.Instance?.PlayUnitMove();
         }
 
         public void IssueAttackCommand(GameObject target)
@@ -47,6 +48,7 @@ namespace RealmCommander.Core
             {
                 OnAttackCommand?.Invoke(target);
                 MoveMarker.Spawn(target.transform.position, true);
+                Audio.AudioManager.Instance?.PlayUnitAttack();
             }
         }
 
@@ -98,9 +100,6 @@ namespace RealmCommander.Core
                 RTS.Unit selectedUnit = selected != null ? selected.GetComponent<RTS.Unit>() : null;
                 if (selectedUnit != null)
                     return selectedUnit.IsEnemy != target.IsEnemy;
-                RPG.Hero selectedHero = selected != null ? selected.GetComponent<RPG.Hero>() : null;
-                if (selectedHero != null)
-                    return selectedHero.IsEnemy != target.IsEnemy;
             }
 
             return false;
@@ -116,9 +115,6 @@ namespace RealmCommander.Core
                 RTS.Unit selectedUnit = selected != null ? selected.GetComponent<RTS.Unit>() : null;
                 if (selectedUnit != null)
                     return target.TeamId == (selectedUnit.IsEnemy ? 0 : 1);
-                RPG.Hero selectedHero = selected != null ? selected.GetComponent<RPG.Hero>() : null;
-                if (selectedHero != null)
-                    return target.TeamId != selectedHero.TeamId;
             }
 
             return false;

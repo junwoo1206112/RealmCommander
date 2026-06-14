@@ -80,7 +80,8 @@ namespace RealmCommander.RTS
 
             Rect selectionRect = new Rect(min.x, min.y, width, height);
 
-            if (Input.GetKey(KeyCode.LeftShift))
+            bool additive = Input.GetKey(KeyCode.LeftShift) || MobileRTSInput.AdditiveSelectionActive;
+            if (additive)
                 SelectionManager.Instance?.AddUnitsInBoxToSelection(selectionRect);
             else
                 SelectionManager.Instance?.SelectUnitsInBox(selectionRect);
@@ -96,6 +97,8 @@ namespace RealmCommander.RTS
 
             if (SelectionManager.Instance == null) return;
 
+            bool additive = Input.GetKey(KeyCode.LeftShift) || MobileRTSInput.AdditiveSelectionActive;
+
             if (Physics.Raycast(ray, out hit, 1000f, selectionMask))
             {
                 var unit = hit.collider.GetComponentInParent<Unit>();
@@ -103,16 +106,12 @@ namespace RealmCommander.RTS
                 {
                     if (unit.CanIssueLocalCommands)
                     {
-                        if (Input.GetKey(KeyCode.LeftShift))
+                        if (additive)
                         {
                             if (SelectionManager.Instance.IsUnitSelected(unit.gameObject))
-                            {
                                 SelectionManager.Instance.RemoveFromSelection(unit.gameObject);
-                            }
                             else
-                            {
                                 SelectionManager.Instance.AddToSelection(unit.gameObject);
-                            }
                         }
                         else
                         {
@@ -122,27 +121,12 @@ namespace RealmCommander.RTS
                     return;
                 }
 
-                var hero = hit.collider.GetComponentInParent<RPG.Hero>();
-                if (hero != null)
-                {
-                    if (hero.CanIssueLocalCommands)
-                    {
-                        if (Input.GetKey(KeyCode.LeftShift) && SelectionManager.Instance.IsUnitSelected(hero.gameObject))
-                            SelectionManager.Instance.RemoveFromSelection(hero.gameObject);
-                        else if (Input.GetKey(KeyCode.LeftShift))
-                            SelectionManager.Instance.AddToSelection(hero.gameObject);
-                        else
-                            SelectionManager.Instance.SelectUnit(hero.gameObject);
-                    }
-                    return;
-                }
-
                 Building building = hit.collider.GetComponentInParent<Building>();
                 if (building != null && building.CanIssueLocalCommands)
                 {
-                    if (Input.GetKey(KeyCode.LeftShift) && SelectionManager.Instance.IsUnitSelected(building.gameObject))
+                    if (additive && SelectionManager.Instance.IsUnitSelected(building.gameObject))
                         SelectionManager.Instance.RemoveFromSelection(building.gameObject);
-                    else if (Input.GetKey(KeyCode.LeftShift))
+                    else if (additive)
                         SelectionManager.Instance.AddToSelection(building.gameObject);
                     else
                         SelectionManager.Instance.SelectUnit(building.gameObject);
@@ -150,7 +134,7 @@ namespace RealmCommander.RTS
                 }
             }
 
-            if (!Input.GetKey(KeyCode.LeftShift))
+            if (!additive)
             {
                 SelectionManager.Instance.ClearSelection();
             }

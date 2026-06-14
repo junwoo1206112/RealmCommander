@@ -34,7 +34,13 @@ namespace RealmCommander.AI
         [Header("Unit Spawning")]
         [SerializeField] private GameObject[] unitPrefabs;
         [SerializeField] private float spawnInterval = 5f;
-        [SerializeField] private int maxUnits = 10;
+        [SerializeField] private int maxUnits = 15;
+
+        [Header("Strategy")]
+        [SerializeField] private float aggroRange = 12f;
+        [SerializeField] private float regroupRange = 8f;
+        [SerializeField] private float retreatHealthPercent = 0.25f;
+        [SerializeField] private int minGroupSize = 3;
 
         [Header("References")]
         [SerializeField] private Transform baseTransform;
@@ -46,14 +52,40 @@ namespace RealmCommander.AI
         private float lastSpawnTime;
         private float lastDiscoveryTime;
         private float lastHumanCheckTime;
+        private int currentWaveSize;
 
         public AIDifficulty Difficulty => difficulty;
 
+        public void Initialize(GameObject[] prefabs, Transform spawnBase = null)
+        {
+            if (prefabs != null && prefabs.Length > 0)
+                unitPrefabs = prefabs;
+            if (spawnBase != null)
+                baseTransform = spawnBase;
+            EnsureUnitPrefabs();
+        }
+
         private void Start()
         {
+            EnsureUnitPrefabs();
+            baseTransform ??= FindEnemyBase();
             playerBase = FindPlayerBase();
             CheckForHumanEnemy();
             RegisterExistingEnemyUnits();
+        }
+
+        private void EnsureUnitPrefabs()
+        {
+            if (unitPrefabs != null && unitPrefabs.Length > 0) return;
+
+            GameObject defaultUnit = Resources.Load<GameObject>("Unit");
+            if (defaultUnit == null)
+            {
+                Debug.LogError("[AI] Resources/Unit.prefab is missing; AI cannot spawn units.");
+                return;
+            }
+
+            unitPrefabs = new[] { defaultUnit };
         }
 
         private void CheckForHumanEnemy()
@@ -64,7 +96,7 @@ namespace RealmCommander.AI
             {
                 if (conn.identity == null) continue;
                 var player = conn.identity.GetComponent<NetworkPlayer>();
-                if (player != null && player.teamId == 1)
+                if (player != null && player.TeamId == 1)
                 {
                     hasHumanEnemy = true;
                     break;
@@ -113,100 +145,182 @@ namespace RealmCommander.AI
         private void UpdateAI()
         {
             if (playerBase == null)
-            {
                 playerBase = FindPlayerBase();
-                return;
+
+            var registry = Core.EntityRegistry.Instance;
+            List<GameObject> enemies = new List<GameObject>();
+            int friendlyCount = 0;
+
+            if (registry != null)
+            {
+                foreach (var u in registry.AllUnits)
+                {
+                    if (u == null || !u.IsAlive) continue;
+                    if (!u.IsEnemy)
+                        enemies.Add(u.gameObject);
+                    else
+                        friendlyCount++;
+                }
+
+                foreach (var b in registry.AllBuildings)
+                {
+                    if (b == null || !b.IsAlive) continue;
+                    if (b.TeamId == 0)
+                        enemies.Add(b.gameObject);
+                }
             }
 
-            var aliveEnemies = FindObjectsByType<Unit>(FindObjectsSortMode.None);
-            int enemyCount = 0;
-            foreach (var u in aliveEnemies)
-                if (!u.IsEnemy && u.IsAlive) enemyCount++;
-
-            GameObject[] enemyCache = new GameObject[enemyCount];
-            int idx = 0;
-            foreach (var u in aliveEnemies)
-                if (!u.IsEnemy && u.IsAlive) enemyCache[idx++] = u.gameObject;
-
+            List<GameObject> aliveUnits = new List<GameObject>();
             foreach (var unit in controlledUnits)
             {
-                if (unit == null) continue;
+                if (unit != null && unit.GetComponent<Unit>() != null && unit.GetComponent<Unit>().IsAlive)
+                    aliveUnits.Add(unit);
+            }
 
+            bool shouldAttack = aliveUnits.Count >= minGroupSize;
+
+            foreach (var unit in aliveUnits)
+            {
                 var unitComponent = unit.GetComponent<Unit>();
                 if (unitComponent == null) continue;
 
-                GameObject nearestEnemy = null;
-                float nearestDist = 15f;
-                foreach (var e in enemyCache)
+                float healthPercent = unitComponent.CurrentHealth / unitComponent.MaxHealth;
+                if (healthPercent < retreatHealthPercent)
                 {
-                    float d = Vector3.Distance(unit.transform.position, e.transform.position);
-                    if (d < nearestDist) { nearestDist = d; nearestEnemy = e; }
-                }
-
-                if (nearestEnemy != null)
-                {
-                    unitComponent.SetTarget(nearestEnemy);
+                    RetreatToBase(unit);
                     continue;
                 }
 
-                float distanceToBase = Vector3.Distance(unit.transform.position, playerBase.position);
-                if (distanceToBase > 4f)
+                GameObject nearestEnemy = FindNearestEnemy(unit.transform.position, enemies);
+                float nearestDist = nearestEnemy != null
+                    ? Vector3.Distance(unit.transform.position, nearestEnemy.transform.position)
+                    : float.MaxValue;
+
+                if (shouldAttack && nearestEnemy != null && nearestDist < aggroRange)
                 {
-                    var agent = unit.GetComponent<NavMeshAgent>();
-                    if (agent != null && agent.enabled && agent.isOnNavMesh)
-                    {
-                        agent.isStopped = false;
-                        if (!agent.hasPath || agent.remainingDistance < 1f)
-                        {
-                            unitComponent.ClearTarget();
-                            Vector3 offset = Random.insideUnitSphere * 2f;
-                            offset.y = 0;
-                            agent.SetDestination(playerBase.position + offset);
-                        }
-                    }
+                    unitComponent.SetTarget(nearestEnemy);
+                }
+                else if (shouldAttack && playerBase != null)
+                {
+                    AttackBase(unit, playerBase.position);
+                }
+                else
+                {
+                    RegroupAtRallyPoint(unit);
                 }
             }
         }
 
-        private GameObject FindNearestEnemy(Vector3 position)
+        private GameObject FindNearestEnemy(Vector3 position, List<GameObject> enemies)
         {
             GameObject nearest = null;
-            float nearestDistance = float.MaxValue;
+            float nearestDist = float.MaxValue;
 
-            var allUnits = FindObjectsByType<Unit>(FindObjectsSortMode.None);
-            foreach (var unit in allUnits)
+            foreach (var enemy in enemies)
             {
-                if (unit.IsEnemy) continue;
-                if (!unit.IsAlive) continue;
-
-                float distance = Vector3.Distance(position, unit.transform.position);
-                if (distance < nearestDistance)
+                if (enemy == null) continue;
+                float dist = Vector3.Distance(position, enemy.transform.position);
+                if (dist < nearestDist)
                 {
-                    nearestDistance = distance;
-                    nearest = unit.gameObject;
+                    nearestDist = dist;
+                    nearest = enemy;
                 }
             }
 
             return nearest;
         }
 
-        private Transform FindPlayerBase()
+        private void RetreatToBase(GameObject unit)
         {
-            var bases = FindObjectsByType<Building>(FindObjectsSortMode.None);
-            foreach (var b in bases)
+            var unitComponent = unit.GetComponent<Unit>();
+            if (unitComponent == null) return;
+
+            unitComponent.ClearTarget();
+
+            Vector3 retreatPos = baseTransform != null
+                ? baseTransform.position + Random.insideUnitSphere * baseRadius
+                : new Vector3(20f, 0f, 0f);
+
+            var agent = unit.GetComponent<NavMeshAgent>();
+            if (agent != null && agent.enabled && agent.isOnNavMesh)
             {
-                if (b.BuildingType == BuildingType.Base && b.TeamId == 0 && b.IsAlive)
+                agent.isStopped = false;
+                agent.SetDestination(retreatPos);
+            }
+        }
+
+        private void AttackBase(GameObject unit, Vector3 basePosition)
+        {
+            var unitComponent = unit.GetComponent<Unit>();
+            if (unitComponent == null) return;
+
+            var agent = unit.GetComponent<NavMeshAgent>();
+            if (agent != null && agent.enabled && agent.isOnNavMesh)
+            {
+                agent.isStopped = false;
+                if (!agent.hasPath || agent.remainingDistance < 2f)
                 {
-                    return b.transform;
+                    unitComponent.ClearTarget();
+                    Vector3 offset = Random.insideUnitSphere * 3f;
+                    offset.y = 0;
+                    agent.SetDestination(basePosition + offset);
                 }
             }
+        }
 
-            foreach (var b in bases)
+        private void RegroupAtRallyPoint(GameObject unit)
+        {
+            var agent = unit.GetComponent<NavMeshAgent>();
+            if (agent == null || !agent.enabled || !agent.isOnNavMesh) return;
+
+            Vector3 rallyPoint = baseTransform != null
+                ? baseTransform.position + new Vector3(0f, 0f, -3f)
+                : new Vector3(20f, 0f, -3f);
+
+            float distToRally = Vector3.Distance(unit.transform.position, rallyPoint);
+            if (distToRally > regroupRange)
             {
-                if (b.BuildingType == BuildingType.Base && b.TeamId == 0)
+                agent.isStopped = false;
+                if (!agent.hasPath || agent.remainingDistance < 1f)
                 {
-                    return b.transform;
+                    var unitComponent = unit.GetComponent<Unit>();
+                    unitComponent?.ClearTarget();
+                    Vector3 offset = Random.insideUnitSphere * 2f;
+                    offset.y = 0;
+                    agent.SetDestination(rallyPoint + offset);
                 }
+            }
+        }
+
+        private Transform FindPlayerBase()
+        {
+            var registry = Core.EntityRegistry.Instance;
+            if (registry == null) return null;
+
+            foreach (var b in registry.AllBuildings)
+            {
+                if (b != null && b.BuildingType == BuildingType.Base && b.TeamId == 0 && b.IsAlive)
+                    return b.transform;
+            }
+
+            foreach (var b in registry.AllBuildings)
+            {
+                if (b != null && b.BuildingType == BuildingType.Base && b.TeamId == 0)
+                    return b.transform;
+            }
+
+            return null;
+        }
+
+        private Transform FindEnemyBase()
+        {
+            var registry = Core.EntityRegistry.Instance;
+            if (registry == null) return null;
+
+            foreach (var b in registry.AllBuildings)
+            {
+                if (b != null && b.BuildingType == BuildingType.Base && b.TeamId == 1 && b.IsAlive)
+                    return b.transform;
             }
 
             return null;
@@ -221,9 +335,11 @@ namespace RealmCommander.AI
 
             Vector3 spawnPos = baseTransform != null
                 ? baseTransform.position + Random.insideUnitSphere * baseRadius
-                : transform.position + Random.insideUnitSphere * 3f;
+                : new Vector3(20f, 0f, 0f) + Random.insideUnitSphere * 3f;
 
             spawnPos.y = 0.5f;
+            if (NavMesh.SamplePosition(spawnPos, out NavMeshHit hit, baseRadius + 3f, NavMesh.AllAreas))
+                spawnPos = hit.position;
 
             GameObject unit = Instantiate(prefab, spawnPos, Quaternion.identity);
             unit.name = $"AI_{prefab.name}_{controlledUnits.Count}";
@@ -245,10 +361,12 @@ namespace RealmCommander.AI
             switch (difficulty)
             {
                 case AIDifficulty.Easy:
+                    unit.ApplyDifficultyMultiplier(0.7f, 0.8f, 1.2f);
                     break;
                 case AIDifficulty.Normal:
                     break;
                 case AIDifficulty.Hard:
+                    unit.ApplyDifficultyMultiplier(1.3f, 1.5f, 0.8f);
                     break;
             }
         }
@@ -267,14 +385,15 @@ namespace RealmCommander.AI
         public void RegisterUnit(GameObject unit)
         {
             if (unit != null && !controlledUnits.Contains(unit))
-            {
                 controlledUnits.Add(unit);
-            }
         }
 
         private void RegisterExistingEnemyUnits()
         {
-            foreach (Unit unit in FindObjectsByType<Unit>(FindObjectsSortMode.None))
+            var registry = Core.EntityRegistry.Instance;
+            if (registry == null) return;
+
+            foreach (Unit unit in registry.AllUnits)
             {
                 if (unit != null && unit.IsEnemy && unit.IsAlive)
                     RegisterUnit(unit.gameObject);

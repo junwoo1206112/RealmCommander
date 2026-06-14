@@ -134,12 +134,17 @@ MonoBehaviour:
   buildingType: 0
   maxHealth: 500
   constructionTime: 5
+  attackDamage: 0
+  attackRange: 5
+  attackSpeed: 1.5
   productionQueue: []
   productionRange: 5
   selectionIndicator: {fileID: 9027775904020888967}
   buildingRenderer: {fileID: 2956282623465426104}
   buildingColor: {r: 0.5, g: 0.5, b: 0.5, a: 1}
   selectedColor: {r: 0, g: 1, b: 1, a: 1}
+  worldVisual: {fileID: 0}
+  healthBar: {fileID: 0}
   teamId: 0
 --- !u!114 &2597906210231786366
 MonoBehaviour:

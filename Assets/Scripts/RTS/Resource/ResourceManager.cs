@@ -13,15 +13,17 @@ namespace RealmCommander.RTS
         [SerializeField] private float startingGold = 500f;
         [SerializeField] private float startingMana = 100f;
 
-        [Header("Resource Generation")]
-        [SerializeField] private float goldPerSecond = 1f;
-        [SerializeField] private float manaPerSecond = 0.5f;
+        [Header("Fallback Passive Income")]
+        [SerializeField] private bool passiveIncomeEnabled;
+        [SerializeField] private float goldPerSecond;
+        [SerializeField] private float manaPerSecond;
         [SerializeField] private float maxMana = 200f;
 
         [SyncVar(hook = nameof(OnTeam0GoldChanged))] private float team0Gold;
         [SyncVar(hook = nameof(OnTeam1GoldChanged))] private float team1Gold;
         [SyncVar(hook = nameof(OnTeam0ManaChanged))] private float team0Mana;
         [SyncVar(hook = nameof(OnTeam1ManaChanged))] private float team1Mana;
+        private bool initialized;
 
         public float CurrentGold => GetGold(GetLocalTeamId());
         public float CurrentMana => GetMana(GetLocalTeamId());
@@ -33,9 +35,14 @@ namespace RealmCommander.RTS
         private void Awake()
         {
             if (Instance == null)
+            {
                 Instance = this;
+                DontDestroyOnLoad(gameObject);
+            }
             else if (Instance != this)
+            {
                 Destroy(gameObject);
+            }
         }
 
         private void OnDestroy()
@@ -47,13 +54,31 @@ namespace RealmCommander.RTS
         public override void OnStartServer()
         {
             base.OnStartServer();
+            EnsureInitialized();
+        }
+
+        private void Start()
+        {
+            if (NetworkServer.active)
+                EnsureInitialized();
+            RefreshLocalDisplay();
+        }
+
+        [Server]
+        private void EnsureInitialized()
+        {
+            if (initialized) return;
             team0Gold = team1Gold = startingGold;
             team0Mana = team1Mana = startingMana;
+            initialized = true;
         }
 
         private void Update()
         {
             if (!NetworkServer.active) return;
+            EnsureInitialized();
+
+            if (!passiveIncomeEnabled) return;
 
             float deltaGold = goldPerSecond * Time.deltaTime;
             float deltaMana = manaPerSecond * Time.deltaTime;
@@ -99,8 +124,6 @@ namespace RealmCommander.RTS
             return true;
         }
 
-        [Server] public bool SpendGold(float amount) => TrySpend(GetLocalTeamId(), amount, 0f);
-        [Server] public bool SpendMana(float amount) => TrySpend(GetLocalTeamId(), 0f, amount);
         [Server] public void AddGold(float amount) => AddGold(GetLocalTeamId(), amount);
         [Server] public void AddMana(float amount) => AddMana(GetLocalTeamId(), amount);
 
@@ -130,7 +153,7 @@ namespace RealmCommander.RTS
 
         private static int GetLocalTeamId()
         {
-            return NetworkPlayer.Local != null ? NetworkPlayer.Local.teamId : 0;
+            return NetworkPlayer.Local != null ? NetworkPlayer.Local.TeamId : 0;
         }
 
         private void OnTeam0GoldChanged(float oldValue, float newValue) => NotifyGoldChanged(0, oldValue, newValue);

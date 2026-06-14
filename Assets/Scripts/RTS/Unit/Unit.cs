@@ -28,18 +28,39 @@ namespace RealmCommander.RTS
         [SerializeField] private Color friendlyColor = Color.blue;
         [SerializeField] private Color enemyColor = Color.red;
         [SerializeField] private Color selectedColor = Color.green;
+        [SerializeField] private global::RealmCommander.Visuals.WorldModelVisual worldVisual;
+        [SerializeField] private global::RealmCommander.Visuals.WorldHealthBar healthBar;
 
         [SyncVar(hook = nameof(OnHealthChanged))]
         private float currentHealth;
+        [SyncVar]
+        private float syncMaxHealth;
+        [SyncVar(hook = nameof(OnArtIdChanged))]
+        private string artId = "unit_soldier";
+        [SyncVar(hook = nameof(OnSyncTargetChanged))]
+        private uint syncTargetNetId;
+#pragma warning disable CS0414
+        [SyncVar(hook = nameof(OnSyncIsStoppedChanged))]
+        private bool syncIsStopped;
+#pragma warning restore CS0414
+        [SyncVar]
+        private Vector3 syncDestination;
         private NavMeshAgent agent;
         private float lastAttackTime;
         private GameObject currentTarget;
         private bool isSelected;
         private MaterialPropertyBlock colorBlock;
 
-        public float MaxHealth => maxHealth;
+        public float MaxHealth => isServer ? maxHealth : syncMaxHealth;
         public float CurrentHealth => currentHealth;
-        public float HealthPercent => currentHealth / maxHealth;
+        public float HealthPercent
+        {
+            get
+            {
+                float max = isServer ? maxHealth : syncMaxHealth;
+                return max > 0f ? currentHealth / max : 0f;
+            }
+        }
         public float AttackRange => attackRange;
         public bool IsEnemy => isEnemy;
         public bool IsAlive => currentHealth > 0;
@@ -72,20 +93,30 @@ namespace RealmCommander.RTS
 
             if (selectionIndicator == null)
             {
-                var indicator = gameObject.AddComponent<SelectionIndicator>();
-                selectionIndicator = indicator.gameObject;
+                selectionIndicator = CreateSelectionIndicator();
                 selectionIndicator.SetActive(false);
             }
 
             UpdateTeamColor();
+            ApplyWorldArt();
+            EnsureHealthBar();
         }
 
         protected override void OnValidate() { }
+
+        private GameObject CreateSelectionIndicator()
+        {
+            GameObject indicatorObject = new GameObject("SelectionIndicator");
+            indicatorObject.transform.SetParent(transform, false);
+            indicatorObject.AddComponent<SelectionIndicator>();
+            return indicatorObject;
+        }
 
         public override void OnStartServer()
         {
             base.OnStartServer();
             currentHealth = maxHealth;
+            syncMaxHealth = maxHealth;
             if (agent != null)
             {
                 agent.enabled = true;
@@ -102,7 +133,17 @@ namespace RealmCommander.RTS
         {
             base.OnStartClient();
             if (!isServer && agent != null)
-                agent.enabled = false;
+            {
+                if (isOwned)
+                {
+                    agent.enabled = true;
+                    agent.speed = moveSpeed;
+                }
+                else
+                {
+                    agent.enabled = false;
+                }
+            }
 
             SubscribeToCommands();
         }
@@ -110,6 +151,7 @@ namespace RealmCommander.RTS
         private void Start()
         {
             SubscribeToCommands();
+            EntityRegistry.Instance?.Register(this);
         }
 
         private bool isSubscribed;
@@ -130,6 +172,8 @@ namespace RealmCommander.RTS
 
         private void OnDestroy()
         {
+            EntityRegistry.Instance?.Unregister(this);
+
             if (SelectionManager.Instance != null)
             {
                 SelectionManager.Instance?.UnregisterSelectableUnit(gameObject);
@@ -152,6 +196,7 @@ namespace RealmCommander.RTS
         private void Update()
         {
             if (!IsAlive) return;
+            if (netIdentity == null) return;
 
             if (!isSubscribed && CanIssueLocalCommands)
             {
@@ -160,13 +205,15 @@ namespace RealmCommander.RTS
 
             if (currentTarget != null)
             {
-                if (IsValidHostileTarget(currentTarget))
+                bool targetValid = IsValidHostileTarget(currentTarget);
+                if (targetValid)
                 {
                     float distance = Vector3.Distance(transform.position, currentTarget.transform.position);
 
                     if (distance <= attackRange)
                     {
                         agent.isStopped = true;
+                        syncIsStopped = true;
                         Vector3 lookDir = currentTarget.transform.position - transform.position;
                         lookDir.y = 0;
                         if (lookDir.sqrMagnitude > 0.01f)
@@ -176,6 +223,7 @@ namespace RealmCommander.RTS
                     else
                     {
                         agent.isStopped = false;
+                        syncIsStopped = false;
                         if (Time.time - lastPathTime >= 0.3f)
                         {
                             lastPathTime = Time.time;
@@ -214,15 +262,26 @@ namespace RealmCommander.RTS
             for (int i = 0; i < hitCount; i++)
             {
                 Unit targetUnit = acquireBuffer[i].GetComponent<Unit>();
-                if (targetUnit == null) continue;
-                if (!IsValidHostileTarget(targetUnit.gameObject)) continue;
-                if (!targetUnit.IsAlive) continue;
-
-                float dist = Vector3.Distance(transform.position, targetUnit.transform.position);
-                if (dist < nearestDist)
+                if (targetUnit != null && targetUnit.IsAlive && IsValidHostileTarget(targetUnit.gameObject))
                 {
-                    nearestDist = dist;
-                    nearest = targetUnit.gameObject;
+                    float dist = Vector3.Distance(transform.position, targetUnit.transform.position);
+                    if (dist < nearestDist)
+                    {
+                        nearestDist = dist;
+                        nearest = targetUnit.gameObject;
+                    }
+                    continue;
+                }
+
+                Building targetBuilding = acquireBuffer[i].GetComponent<Building>();
+                if (targetBuilding != null && targetBuilding.IsAlive && IsValidHostileTarget(targetBuilding.gameObject))
+                {
+                    float dist = Vector3.Distance(transform.position, targetBuilding.transform.position);
+                    if (dist < nearestDist)
+                    {
+                        nearestDist = dist;
+                        nearest = targetBuilding.gameObject;
+                    }
                 }
             }
 
@@ -238,7 +297,11 @@ namespace RealmCommander.RTS
             isSelected = selected;
             if (selectionIndicator != null)
             {
-                selectionIndicator.SetActive(selected);
+                SelectionIndicator indicator = selectionIndicator.GetComponent<SelectionIndicator>();
+                if (indicator != null)
+                    indicator.SetSelected(selected);
+                else
+                    selectionIndicator.SetActive(selected);
             }
             ApplyColor();
 
@@ -274,8 +337,45 @@ namespace RealmCommander.RTS
         {
             isEnemy = enemyTeam;
             if (agent != null)
-                agent.avoidancePriority = enemyTeam ? 50 : 0;
+                agent.avoidancePriority = enemyTeam ? 50 : 10;
             UpdateTeamColor();
+            ApplyWorldArt();
+        }
+
+        [Server]
+        public void ApplySpec(string specId)
+        {
+            var spec = OpenSpec.SpecManager.Instance?.GetSpec("units", specId);
+            if (spec == null)
+            {
+                artId = specId;
+                ApplyWorldArt();
+                return;
+            }
+
+            maxHealth = GetSpecFloat(spec, "MaxHealth", maxHealth);
+            attackDamage = GetSpecFloat(spec, "AttackDamage", attackDamage);
+            attackRange = GetSpecFloat(spec, "AttackRange", attackRange);
+            attackSpeed = GetSpecFloat(spec, "AttackSpeed", attackSpeed);
+            moveSpeed = GetSpecFloat(spec, "MoveSpeed", moveSpeed);
+
+            currentHealth = maxHealth;
+            syncMaxHealth = maxHealth;
+
+            if (agent != null)
+            {
+                agent.speed = moveSpeed;
+                agent.stoppingDistance = Mathf.Max(attackRange * 0.4f, 0.5f);
+            }
+
+            Debug.Log($"[Unit] Applied spec '{specId}': HP={maxHealth}, ATK={attackDamage}, SPD={moveSpeed}");
+            artId = specId;
+            ApplyWorldArt();
+        }
+
+        private static float GetSpecFloat(OpenSpec.SpecData spec, string key, float fallback)
+        {
+            return OpenSpec.SpecManager.Instance.GetProperty("units", spec.id, key, fallback);
         }
 
         private void OnHealthChanged(float oldValue, float newValue)
@@ -285,6 +385,7 @@ namespace RealmCommander.RTS
 
         private void TryAttack()
         {
+            if (!isServer || !NetworkServer.active) return;
             if (Time.time - lastAttackTime >= attackSpeed)
             {
                 if (currentTarget == null) return;
@@ -293,24 +394,22 @@ namespace RealmCommander.RTS
                 if (combat != null)
                 {
                     combat.ApplyCombatDamage(gameObject, currentTarget, attackDamage);
-                }
-                else
-                {
-                    Unit targetUnit = currentTarget.GetComponent<Unit>();
-                    if (targetUnit != null)
-                    {
-                        targetUnit.TakeDamage(attackDamage);
-                        return;
-                    }
-
-                    currentTarget.GetComponent<Building>()?.TakeDamage(attackDamage);
+                    RpcPlayAttackSound();
                 }
             }
+        }
+
+        [ClientRpc]
+        private void RpcPlayAttackSound()
+        {
+            if (!isServer)
+                Audio.AudioManager.Instance?.PlayUnitAttack();
         }
 
         private void Die()
         {
             agent.isStopped = true;
+            syncIsStopped = true;
             agent.enabled = false;
             OnDeath?.Invoke();
 
@@ -329,7 +428,7 @@ namespace RealmCommander.RTS
         private System.Collections.IEnumerator DestroyAfterFrame()
         {
             yield return null;
-            if (gameObject != null)
+            if (gameObject != null && NetworkServer.active)
                 NetworkServer.Destroy(gameObject);
         }
 
@@ -337,6 +436,8 @@ namespace RealmCommander.RTS
         private void RpcOnDeath()
         {
             ApplyColor(Color.gray);
+            if (!isServer && agent != null)
+                agent.enabled = false;
         }
 
         private void HandleMoveCommand(Vector3 position)
@@ -361,22 +462,50 @@ namespace RealmCommander.RTS
             Vector3 destination = GetFormationDestination(position);
 
             if (!NetworkClient.active || isServer)
+            {
                 ApplyMoveCommand(destination);
+            }
             else
+            {
+                currentTarget = null;
+                syncTargetNetId = 0;
+                lastCommandTime = Time.time;
+                TrySetDestination(destination);
                 CmdMove(destination);
+            }
         }
 
         [Command]
         private void CmdMove(Vector3 position)
         {
             ApplyMoveCommand(position);
+            RpcConfirmMove(position);
+        }
+
+        [ClientRpc]
+        private void RpcConfirmMove(Vector3 position)
+        {
+            if (!isServer && isOwned && agent != null && agent.enabled)
+            {
+                TrySetDestination(position);
+            }
         }
 
         private void ApplyMoveCommand(Vector3 position)
         {
             currentTarget = null;
+            syncTargetNetId = 0;
             lastCommandTime = Time.time;
             TrySetDestination(position);
+            if (isServer)
+                RpcPlayMoveSound();
+        }
+
+        [ClientRpc]
+        private void RpcPlayMoveSound()
+        {
+            if (!isServer)
+                Audio.AudioManager.Instance?.PlayUnitMove();
         }
 
         private void HandleAttackCommand(GameObject target)
@@ -410,6 +539,8 @@ namespace RealmCommander.RTS
             if (NetworkServer.active && !IsValidHostileTarget(target)) return;
 
             currentTarget = target;
+            syncTargetNetId = target != null ? target.GetComponent<NetworkIdentity>()?.netId ?? 0 : 0;
+
             if (target != null)
             {
                 TrySetDestination(target.transform.position);
@@ -419,7 +550,10 @@ namespace RealmCommander.RTS
         public void ClearTarget()
         {
             currentTarget = null;
-            agent.isStopped = false;
+            syncTargetNetId = 0;
+            if (agent != null && agent.enabled)
+                agent.isStopped = false;
+            syncIsStopped = false;
         }
 
         private bool TrySetDestination(Vector3 destination)
@@ -443,6 +577,8 @@ namespace RealmCommander.RTS
                 return false;
 
             agent.isStopped = false;
+            syncIsStopped = false;
+            syncDestination = destinationHit.position;
             return agent.SetDestination(destinationHit.position);
         }
 
@@ -486,8 +622,59 @@ namespace RealmCommander.RTS
         private void OnTeamChanged(bool oldValue, bool newValue)
         {
             if (agent != null)
-                agent.avoidancePriority = newValue ? 50 : 0;
+                agent.avoidancePriority = newValue ? 50 : 10;
             UpdateTeamColor();
+            ApplyWorldArt();
+        }
+
+        private void OnArtIdChanged(string oldValue, string newValue)
+        {
+            ApplyWorldArt();
+        }
+
+        private void OnSyncTargetChanged(uint oldValue, uint newValue)
+        {
+            if (isServer) return;
+
+            if (newValue == 0)
+            {
+                currentTarget = null;
+                return;
+            }
+
+            var allObjects = FindObjectsByType<NetworkIdentity>(FindObjectsSortMode.None);
+            foreach (var obj in allObjects)
+            {
+                if (obj.netId == newValue)
+                {
+                    currentTarget = obj.gameObject;
+                    return;
+                }
+            }
+        }
+
+        private void OnSyncIsStoppedChanged(bool oldValue, bool newValue)
+        {
+            if (isServer) return;
+            if (agent != null && agent.enabled)
+                agent.isStopped = newValue;
+        }
+
+        private void ApplyWorldArt()
+        {
+            worldVisual ??= GetComponent<global::RealmCommander.Visuals.WorldModelVisual>();
+            if (worldVisual == null)
+                worldVisual = gameObject.AddComponent<global::RealmCommander.Visuals.WorldModelVisual>();
+
+            worldVisual.ApplyUnit(artId, isEnemy);
+        }
+
+        private void EnsureHealthBar()
+        {
+            healthBar ??= GetComponent<global::RealmCommander.Visuals.WorldHealthBar>();
+            if (healthBar == null)
+                healthBar = gameObject.AddComponent<global::RealmCommander.Visuals.WorldHealthBar>();
+            healthBar.SetLayout(new Vector3(0f, 1.25f, 0f), new Vector2(0.85f, 0.075f));
         }
 
         private void ApplyColor()
@@ -520,21 +707,34 @@ namespace RealmCommander.RTS
             return false;
         }
 
+        [Server]
+        public void ApplyDifficultyMultiplier(float healthMult, float damageMult, float speedMult)
+        {
+            maxHealth *= healthMult;
+            attackDamage *= damageMult;
+            moveSpeed *= speedMult;
+            currentHealth = maxHealth;
+            syncMaxHealth = maxHealth;
+
+            if (agent != null)
+                agent.speed = moveSpeed;
+
+            ApplyWorldArt();
+        }
+
         private void OnMouseDown()
         {
             if (!CanIssueLocalCommands || SelectionManager.Instance == null) return;
             if (RTS.BoxSelector.WasClickHandled) return;
 
-            if (Input.GetKey(KeyCode.LeftShift))
+            bool additive = Input.GetKey(KeyCode.LeftShift) || MobileRTSInput.AdditiveSelectionActive;
+
+            if (additive)
             {
                 if (isSelected)
-                {
                     SelectionManager.Instance.RemoveFromSelection(gameObject);
-                }
                 else
-                {
                     SelectionManager.Instance.AddToSelection(gameObject);
-                }
             }
             else
             {

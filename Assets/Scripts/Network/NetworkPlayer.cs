@@ -9,12 +9,21 @@ namespace RealmCommander.Network
         public string playerName = "Player";
 
         [SyncVar(hook = nameof(OnPlayerTeamChanged))]
-        public int teamId = 0;
+        [SerializeField, Range(0, 1)] private int teamId = 0;
 
         [SyncVar]
         public bool isGameReady = false;
 
+        [SerializeField] private bool showDebugOverlay;
+
         public static NetworkPlayer Local { get; private set; }
+        public int TeamId => teamId;
+
+        [Server]
+        public void ServerSetTeamId(int newTeamId)
+        {
+            teamId = Mathf.Clamp(newTeamId, 0, 1);
+        }
 
         public override void OnStartLocalPlayer()
         {
@@ -74,6 +83,7 @@ namespace RealmCommander.Network
 
         private void OnGUI()
         {
+            if (!showDebugOverlay) return;
             if (_isDestroyed || netIdentity == null || !isOwned) return;
 
             Vector2 size = new Vector2(200f, 25f);
