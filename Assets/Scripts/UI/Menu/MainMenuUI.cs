@@ -72,6 +72,17 @@ namespace RealmCommander.UI
                 canvasObj.AddComponent<CanvasScaler>();
                 canvasObj.AddComponent<GraphicRaycaster>();
             }
+            else if (canvas.GetComponent<GraphicRaycaster>() == null)
+            {
+                canvas.gameObject.AddComponent<GraphicRaycaster>();
+            }
+
+            if (FindAnyObjectByType<UnityEngine.EventSystems.EventSystem>() == null)
+            {
+                var esObj = new GameObject("EventSystem");
+                esObj.AddComponent<UnityEngine.EventSystems.EventSystem>();
+                esObj.AddComponent<UnityEngine.EventSystems.StandaloneInputModule>();
+            }
 
             if (titleText == null)
             {
@@ -92,8 +103,6 @@ namespace RealmCommander.UI
 
             if (quitButton == null)
                 quitButton = CreateButton(canvas.transform, "QuitButton", "Quit", new Color(0.6f, 0.2f, 0.2f), new Vector2(0.5f, 0.3f));
-
-            FindAnyObjectByType<UnityEngine.EventSystems.EventSystem>();
         }
 
         private Button CreateButton(Transform parent, string name, string text, Color color, Vector2 anchor)
