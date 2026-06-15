@@ -20,6 +20,11 @@ namespace RealmCommander.UI
         [SerializeField] private TextMeshProUGUI statusText;
         [SerializeField] private GameObject statusPanel;
 
+        [Header("Host Options")]
+        [SerializeField] private GameObject hostOptionsPanel;
+        [SerializeField] private Button singlePlayerButton;
+        [SerializeField] private Button multiplayerButton;
+
         [Header("Network Info")]
         [SerializeField] private TextMeshProUGUI localIPText;
 
@@ -34,11 +39,20 @@ namespace RealmCommander.UI
             if (backButton != null)
                 backButton.onClick.AddListener(OnBackToMenu);
 
+            if (singlePlayerButton != null)
+                singlePlayerButton.onClick.AddListener(OnSinglePlayer);
+
+            if (multiplayerButton != null)
+                multiplayerButton.onClick.AddListener(OnMultiplayer);
+
             if (ipInputField != null)
                 ipInputField.text = "127.0.0.1";
 
             if (localIPText != null)
                 localIPText.text = "LAN IP: Loading... | TCP 7777";
+
+            if (hostOptionsPanel != null)
+                hostOptionsPanel.SetActive(false);
 
             ShowStatus("", false);
 
@@ -90,6 +104,27 @@ namespace RealmCommander.UI
 
         public void OnHostGame()
         {
+            if (hostOptionsPanel != null)
+            {
+                hostOptionsPanel.SetActive(true);
+                return;
+            }
+
+            StartHost(false);
+        }
+
+        public void OnSinglePlayer()
+        {
+            StartHost(true);
+        }
+
+        public void OnMultiplayer()
+        {
+            StartHost(false);
+        }
+
+        private void StartHost(bool singlePlayer)
+        {
             var nm = NetworkBootstrap.EnsureNetworkManager();
             if (nm == null)
             {
@@ -99,8 +134,18 @@ namespace RealmCommander.UI
 
             nm.networkAddress = "0.0.0.0";
             nm.StartHost();
-            ShowStatus("Hosting game...", true);
-            Debug.Log("[LobbyUI] Hosting game, waiting for scene change...");
+
+            if (singlePlayer)
+            {
+                NetworkGameManager.Instance?.SetSinglePlayerMode();
+                ShowStatus("Starting single player...", true);
+                Debug.Log("[LobbyUI] Starting single player game with AI");
+            }
+            else
+            {
+                ShowStatus("Hosting game, waiting for players...", true);
+                Debug.Log("[LobbyUI] Hosting multiplayer game");
+            }
         }
 
         public void OnJoinGame()
@@ -127,6 +172,9 @@ namespace RealmCommander.UI
 
         public void OnBackToMenu()
         {
+            if (hostOptionsPanel != null)
+                hostOptionsPanel.SetActive(false);
+
             if (NetworkServer.active)
             {
                 NetworkManager.singleton?.StopHost();

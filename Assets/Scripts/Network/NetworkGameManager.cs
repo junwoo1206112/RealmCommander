@@ -290,7 +290,7 @@ namespace RealmCommander.Network
                     return;
                 }
 
-                float delay = playerCount >= 2 ? autoStartDelay : 2f;
+                float delay = playerCount >= 2 ? autoStartDelay : Mathf.Min(autoStartDelay, 2f);
                 _autoStartTimer += Time.deltaTime;
                 if (_autoStartTimer >= delay && playerCount >= minPlayers && allPlayersCreated)
                 {
@@ -383,6 +383,14 @@ namespace RealmCommander.Network
             Core.TimeScaleManager.Reset();
             OnGameStarted?.Invoke();
             Debug.Log("[Game] Game Started - State: Playing");
+        }
+
+        [Server]
+        public void SetSinglePlayerMode()
+        {
+            minPlayers = 0;
+            autoStartDelay = 0.5f;
+            Debug.Log("[Game] Single player mode - game will start immediately");
         }
 
         [Server]
