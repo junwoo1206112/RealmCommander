@@ -262,7 +262,7 @@ namespace RealmCommander.Network
                     }
                     
                     var player = conn.identity.GetComponent<NetworkPlayer>();
-                    if (player != null && !player.isGameReady)
+                    if (player != null && !player.IsGameReady)
                     {
                         allReady = false;
                         break;
