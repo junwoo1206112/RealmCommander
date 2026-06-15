@@ -64,7 +64,7 @@ namespace RealmCommander.Network
             if (targetUnit != null)
             {
                 targetUnit.TakeDamage(damage);
-                RpcShowCombatFeedback(target, damage, false);
+                RpcShowCombatFeedback(target, damage);
                 return;
             }
 
@@ -72,15 +72,15 @@ namespace RealmCommander.Network
             if (targetBuilding != null)
             {
                 targetBuilding.TakeDamage(damage);
-                RpcShowCombatFeedback(target, damage, false);
+                RpcShowCombatFeedback(target, damage);
             }
         }
 
         [ClientRpc]
-        private void RpcShowCombatFeedback(GameObject target, float damage, bool isSkill)
+        private void RpcShowCombatFeedback(GameObject target, float damage)
         {
             if (target == null) return;
-            Color color = isSkill ? new Color(1f, 0.82f, 0.1f) : new Color(1f, 0.22f, 0.12f);
+            Color color = new Color(1f, 0.22f, 0.12f);
             Visuals.CombatFeedback.PlayHit(target, color);
             Visuals.CombatFeedback.ShowDamageNumber(target, damage);
         }

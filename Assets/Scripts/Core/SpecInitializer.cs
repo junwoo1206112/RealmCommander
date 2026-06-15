@@ -20,7 +20,6 @@ namespace RealmCommander.Core
 
             SpecManager.Instance.LoadSpecs("units", "Specs/units");
             SpecManager.Instance.LoadSpecs("buildings", "Specs/buildings");
-            SpecManager.Instance.LoadSpecs("skills", "Specs/skills");
 
             Debug.Log("OpenSpec 초기화 완료");
         }

@@ -1,6 +1,0 @@
-ID,Name,Description,Damage,Cooldown,ManaCost,Range,EffectType
-skill_fireball,Fireball,범위 화염구 투사체,50,5,20,8,AoE
-skill_heal,Heal,단일 아군 치유,0,8,15,6,Single
-skill_shield,Shield,일시적인 보호막 부여,0,10,25,0,Buff
-skill_lightning,Lightning,단일 대상 번개 공격,40,3,15,7,Single
-skill_ice_storm,Ice Storm,범위 빙결 폭풍,60,12,40,10,AoE

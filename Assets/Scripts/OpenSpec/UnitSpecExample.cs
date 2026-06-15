@@ -7,14 +7,8 @@ namespace RealmCommander.RTS
     {
         private void Start()
         {
-            // 유닛 스펙 예제
             ExampleUnitSpecs();
-            
-            // 건물 펙 예제
             ExampleBuildingSpecs();
-            
-            // 스킬 스펙 예제
-            ExampleSkillSpecs();
         }
 
         private void ExampleUnitSpecs()
@@ -44,20 +38,6 @@ namespace RealmCommander.RTS
                 Debug.Log($"  - HP: {SpecManager.Instance.GetProperty<float>("buildings", building.id, "MaxHealth")}");
                 Debug.Log($"  - 건설시간: {SpecManager.Instance.GetProperty<float>("buildings", building.id, "BuildTime")}초");
                 Debug.Log($"  - 비용: {SpecManager.Instance.GetProperty<float>("buildings", building.id, "GoldCost")} Gold");
-            }
-        }
-
-        private void ExampleSkillSpecs()
-        {
-            Debug.Log("=== 스킬 스펙 예제 ===");
-            
-            var skills = SpecManager.Instance.GetAllSpecs("skills");
-            foreach (var skill in skills)
-            {
-                Debug.Log($"스킬: {skill.name}");
-                Debug.Log($"  - 피해량: {SpecManager.Instance.GetProperty<float>("skills", skill.id, "Damage")}");
-                Debug.Log($"  - 쿨다운: {SpecManager.Instance.GetProperty<float>("skills", skill.id, "Cooldown")}초");
-                Debug.Log($"  - 마나비용: {SpecManager.Instance.GetProperty<float>("skills", skill.id, "ManaCost")}");
             }
         }
     }

@@ -26,9 +26,6 @@ namespace OpenSpec.Editor
             
             // 건물 스펙 import
             ImportSpecs("buildings", $"{specsFolder}/buildings.csv");
-            
-            // 스킬 스펙 import
-            ImportSpecs("skills", $"{specsFolder}/skills.csv");
 
             AssetDatabase.Refresh();
             EditorUtility.DisplayDialog("OpenSpec", "모든 스펙이 import되었습니다!", "확인");
@@ -46,12 +43,6 @@ namespace OpenSpec.Editor
             ImportSpecs("buildings", "Assets/Resources/Specs/buildings.csv");
         }
 
-        [MenuItem("Tools/OpenSpec/Import Skill Specs")]
-        public static void ImportSkillSpecs()
-        {
-            ImportSpecs("skills", "Assets/Resources/Specs/skills.csv");
-        }
-
         [MenuItem("Tools/OpenSpec/Generate Documentation")]
         public static void GenerateDocumentation()
         {
@@ -64,7 +55,6 @@ namespace OpenSpec.Editor
 
             GenerateSpecDoc("units", "Assets/Resources/Specs/units.csv", $"{docsFolder}/UnitSpecs.md");
             GenerateSpecDoc("buildings", "Assets/Resources/Specs/buildings.csv", $"{docsFolder}/BuildingSpecs.md");
-            GenerateSpecDoc("skills", "Assets/Resources/Specs/skills.csv", $"{docsFolder}/SkillSpecs.md");
 
             AssetDatabase.Refresh();
             EditorUtility.DisplayDialog("OpenSpec", "문서가 생성되었습니다!\nAssets/Resources/Specs/Docs/", "확인");
