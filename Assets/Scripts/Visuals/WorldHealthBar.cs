@@ -32,7 +32,7 @@ namespace RealmCommander.Visuals
         {
             UpdateVisual();
 
-            Camera camera = Camera.main;
+            Camera camera = Network.NetworkUtils.GetMainCamera();
             if (camera == null || pivot == null) return;
             Vector3 direction = pivot.position - camera.transform.position;
             if (direction.sqrMagnitude > 0.0001f)

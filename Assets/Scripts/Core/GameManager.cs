@@ -84,11 +84,11 @@ namespace RealmCommander.Core
 
         public void SetGameSpeed(float speed)
         {
-            if (NetworkClient.active) return;
+            if (NetworkClient.active && !NetworkServer.active) return;
             gameSpeed = Mathf.Clamp(speed, 0.5f, 3f);
             if (!IsPaused)
             {
-                if (Network.NetworkGameManager.Instance != null)
+                if (Network.NetworkGameManager.Instance != null && NetworkServer.active)
                     Network.NetworkGameManager.Instance.ServerSetGameSpeed(gameSpeed);
                 else
                     TimeScaleManager.SetTimeScale(gameSpeed);

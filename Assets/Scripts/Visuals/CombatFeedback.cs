@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using TMPro;
+using RealmCommander.Core;
 
 namespace RealmCommander.Visuals
 {
@@ -150,8 +151,7 @@ namespace RealmCommander.Visuals
         private static void EnsureMaterial()
         {
             if (hitMaterial != null) return;
-            Shader shader = Shader.Find("Unlit/Color") ?? Shader.Find("Sprites/Default");
-            hitMaterial = new Material(shader);
+            hitMaterial = StaticResources.GetOrCreateMaterial("Unlit/Color", Color.white);
         }
 
         private void OnDestroy()

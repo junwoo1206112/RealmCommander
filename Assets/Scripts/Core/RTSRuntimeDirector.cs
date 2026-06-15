@@ -33,12 +33,13 @@ namespace RealmCommander.Core
             var registry = EntityRegistry.Instance;
             if (registry != null)
             {
-            foreach (Unit unit in registry.AllUnits)
-            {
-                if (unit == null) continue;
-                bool isFriendly = teamId == 0 ? !unit.IsEnemy : unit.IsEnemy;
-                if (isFriendly && unit.IsAlive)
-                    return unit;
+                foreach (Unit unit in registry.AllUnits)
+                {
+                    if (unit == null) continue;
+                    bool isFriendly = teamId == 0 ? !unit.IsEnemy : unit.IsEnemy;
+                    if (isFriendly && unit.IsAlive)
+                        return unit;
+                }
             }
 
             foreach (Unit unit in FindObjectsByType<Unit>(FindObjectsSortMode.None))
@@ -46,14 +47,6 @@ namespace RealmCommander.Core
                 if (unit == null) continue;
                 bool isFriendly = teamId == 0 ? !unit.IsEnemy : unit.IsEnemy;
                 if (isFriendly && unit.IsAlive)
-                    return unit;
-            }
-            }
-
-            foreach (Unit unit in FindObjectsByType<Unit>(FindObjectsSortMode.None))
-            {
-                bool isFriendly = teamId == 0 ? !unit.IsEnemy : unit.IsEnemy;
-                if (unit != null && isFriendly && unit.IsAlive)
                     return unit;
             }
 

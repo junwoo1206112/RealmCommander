@@ -373,7 +373,7 @@ namespace RealmCommander.RTS
 
         private void OnHealthChanged(float oldValue, float newValue)
         {
-            OnHealthChangedEvent?.Invoke(newValue, maxHealth);
+            OnHealthChangedEvent?.Invoke(newValue, MaxHealth);
         }
 
         private void TryAttack()

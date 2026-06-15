@@ -262,16 +262,16 @@ namespace RealmCommander.Network
                     }
                     
                     var player = conn.identity.GetComponent<NetworkPlayer>();
-                    if (player != null && !player.IsGameReady)
+                    if (player == null || !player.IsGameReady)
                     {
                         allReady = false;
                         break;
                     }
                 }
 
-                if (playerCount >= minPlayers && allPlayersCreated)
+                if (playerCount >= minPlayers && allPlayersCreated && allReady)
                 {
-                    Debug.Log("[Game] Required players created - starting game");
+                    Debug.Log("[Game] All players ready - starting game");
                     StartGame();
                     return;
                 }
@@ -279,13 +279,6 @@ namespace RealmCommander.Network
                 if (playerCount >= minPlayers && Input.GetKeyDown(KeyCode.Return))
                 {
                     Debug.Log("[Game] Enter key pressed - starting game");
-                    StartGame();
-                    return;
-                }
-
-                if (allReady && playerCount >= minPlayers)
-                {
-                    Debug.Log("[Game] All players ready - starting game");
                     StartGame();
                     return;
                 }
