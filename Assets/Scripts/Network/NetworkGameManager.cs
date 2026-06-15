@@ -290,8 +290,9 @@ namespace RealmCommander.Network
                     return;
                 }
 
+                float delay = playerCount >= 2 ? autoStartDelay : 2f;
                 _autoStartTimer += Time.deltaTime;
-                if (_autoStartTimer >= autoStartDelay && playerCount >= minPlayers && allPlayersCreated)
+                if (_autoStartTimer >= delay && playerCount >= minPlayers && allPlayersCreated)
                 {
                     StartGame();
                 }
