@@ -75,19 +75,7 @@ namespace RealmCommander.RTS
         private void Awake()
         {
             agent = GetComponent<NavMeshAgent>();
-            if (agent != null)
-            {
-                agent.speed = moveSpeed;
-                agent.stoppingDistance = Mathf.Max(attackRange * 0.4f, 0.5f);
-                agent.acceleration = 30f;
-                agent.angularSpeed = 400f;
-                agent.autoBraking = false;
-                agent.obstacleAvoidanceType = ObstacleAvoidanceType.LowQualityObstacleAvoidance;
-                agent.avoidancePriority = isEnemy ? 50 : 10;
-                agent.radius = 0.25f;
-                agent.height = 0.8f;
-                agent.autoRepath = true;
-            }
+            ConfigureAgent();
 
             currentHealth = maxHealth;
 
@@ -100,6 +88,21 @@ namespace RealmCommander.RTS
             UpdateTeamColor();
             ApplyWorldArt();
             EnsureHealthBar();
+        }
+
+        private void ConfigureAgent()
+        {
+            if (agent == null) return;
+            agent.speed = moveSpeed;
+            agent.stoppingDistance = Mathf.Max(attackRange * 0.4f, 0.5f);
+            agent.acceleration = 30f;
+            agent.angularSpeed = 400f;
+            agent.autoBraking = false;
+            agent.obstacleAvoidanceType = ObstacleAvoidanceType.LowQualityObstacleAvoidance;
+            agent.avoidancePriority = isEnemy ? 50 : 10;
+            agent.radius = 0.25f;
+            agent.height = 0.8f;
+            agent.autoRepath = true;
         }
 
         protected override void OnValidate() { }
@@ -120,12 +123,7 @@ namespace RealmCommander.RTS
             if (agent != null)
             {
                 agent.enabled = true;
-                agent.speed = moveSpeed;
-                agent.acceleration = 30f;
-                agent.angularSpeed = 400f;
-                agent.autoBraking = false;
-                agent.stoppingDistance = Mathf.Max(attackRange * 0.4f, 0.5f);
-                agent.avoidancePriority = isEnemy ? 50 : 10;
+                ConfigureAgent();
             }
         }
 
@@ -361,12 +359,7 @@ namespace RealmCommander.RTS
 
             currentHealth = maxHealth;
             syncMaxHealth = maxHealth;
-
-            if (agent != null)
-            {
-                agent.speed = moveSpeed;
-                agent.stoppingDistance = Mathf.Max(attackRange * 0.4f, 0.5f);
-            }
+            ConfigureAgent();
 
             Debug.Log($"[Unit] Applied spec '{specId}': HP={maxHealth}, ATK={attackDamage}, SPD={moveSpeed}");
             artId = specId;
@@ -642,14 +635,9 @@ namespace RealmCommander.RTS
                 return;
             }
 
-            var allObjects = FindObjectsByType<NetworkIdentity>(FindObjectsSortMode.None);
-            foreach (var obj in allObjects)
+            if (NetworkClient.spawned.TryGetValue(newValue, out NetworkIdentity identity))
             {
-                if (obj.netId == newValue)
-                {
-                    currentTarget = obj.gameObject;
-                    return;
-                }
+                currentTarget = identity.gameObject;
             }
         }
 
@@ -724,22 +712,8 @@ namespace RealmCommander.RTS
 
         private void OnMouseDown()
         {
-            if (!CanIssueLocalCommands || SelectionManager.Instance == null) return;
-            if (RTS.BoxSelector.WasClickHandled) return;
-
-            bool additive = Input.GetKey(KeyCode.LeftShift) || MobileRTSInput.AdditiveSelectionActive;
-
-            if (additive)
-            {
-                if (isSelected)
-                    SelectionManager.Instance.RemoveFromSelection(gameObject);
-                else
-                    SelectionManager.Instance.AddToSelection(gameObject);
-            }
-            else
-            {
-                SelectionManager.Instance.SelectUnit(gameObject);
-            }
+            if (!CanIssueLocalCommands) return;
+            SelectionHelper.HandleSelection(gameObject, isSelected);
         }
     }
 }

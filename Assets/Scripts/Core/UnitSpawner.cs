@@ -44,8 +44,8 @@ namespace RealmCommander.Core
 
             EnsureStartingBases();
 
-            NetworkConnectionToClient friendlyOwner = FindTeamConnection(0);
-            NetworkConnectionToClient enemyOwner = FindTeamConnection(1);
+            NetworkConnectionToClient friendlyOwner = NetworkUtils.FindTeamConnection(0);
+            NetworkConnectionToClient enemyOwner = NetworkUtils.FindTeamConnection(1);
 
             for (int i = 0; i < friendlyUnitCount; i++)
             {
@@ -179,7 +179,7 @@ namespace RealmCommander.Core
             Building building = buildingObject.AddComponent<Building>();
             building.ConfigureRuntimeBuilding(name, type, teamId);
 
-            NetworkConnectionToClient owner = FindTeamConnection(teamId);
+            NetworkConnectionToClient owner = NetworkUtils.FindTeamConnection(teamId);
             if (owner != null) NetworkServer.Spawn(buildingObject, owner);
             else NetworkServer.Spawn(buildingObject);
         }
@@ -192,28 +192,13 @@ namespace RealmCommander.Core
                 if (unit == null || unit.IsEnemy) continue;
                 if (unit.netIdentity.connectionToClient != null) continue;
 
-                NetworkConnectionToClient owner = FindTeamConnection(0);
+                NetworkConnectionToClient owner = NetworkUtils.FindTeamConnection(0);
                 if (owner != null)
                 {
                     unit.netIdentity.AssignClientAuthority(owner);
                     Debug.Log($"[UnitSpawner] Assigned ownership of {unit.name} to connection {owner.connectionId}");
                 }
             }
-        }
-
-        [Server]
-        private static NetworkConnectionToClient FindTeamConnection(int teamId)
-        {
-            foreach (NetworkConnectionToClient connection in NetworkServer.connections.Values)
-            {
-                NetworkPlayer player = connection.identity != null
-                    ? connection.identity.GetComponent<NetworkPlayer>()
-                    : null;
-                if (player != null && player.TeamId == teamId)
-                    return connection;
-            }
-
-            return null;
         }
 
         [Server]

@@ -6,18 +6,20 @@ namespace RealmCommander.Network
     public class NetworkPlayer : NetworkBehaviour
     {
         [SyncVar(hook = nameof(OnPlayerNameChanged))]
-        public string playerName = "Player";
+        private string playerName = "Player";
 
         [SyncVar(hook = nameof(OnPlayerTeamChanged))]
         [SerializeField, Range(0, 1)] private int teamId = 0;
 
         [SyncVar]
-        public bool isGameReady = false;
+        private bool isGameReady = false;
 
         [SerializeField] private bool showDebugOverlay;
 
         public static NetworkPlayer Local { get; private set; }
         public int TeamId => teamId;
+        public string PlayerName => playerName;
+        public bool IsGameReady => isGameReady;
 
         [Server]
         public void ServerSetTeamId(int newTeamId)
@@ -35,7 +37,9 @@ namespace RealmCommander.Network
         private void CmdSetPlayerName(string name)
         {
             string safeName = string.IsNullOrWhiteSpace(name) ? "Player" : name.Trim();
-            playerName = safeName.Substring(0, Mathf.Min(24, safeName.Length));
+            safeName = System.Text.RegularExpressions.Regex.Replace(safeName, @"[<>]", "");
+            safeName = safeName.Substring(0, Mathf.Min(24, safeName.Length));
+            playerName = safeName;
         }
 
         public void SetReady(bool ready)
@@ -46,6 +50,10 @@ namespace RealmCommander.Network
         [Command]
         private void CmdSetReady(bool ready)
         {
+            var gm = NetworkGameManager.Instance;
+            if (gm != null && gm.State != NetworkGameManager.GameState.WaitingForPlayers
+                && gm.State != NetworkGameManager.GameState.Idle)
+                return;
             isGameReady = ready;
         }
 

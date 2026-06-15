@@ -8,7 +8,8 @@ namespace RealmCommander.RTS
     {
         [SerializeField] private ResourceType resourceType = ResourceType.Gold;
         [SerializeField] private float generationRate = 5f;
-        [SerializeField, Range(0, 1)] private int teamId;
+        [SerializeField, Range(0, 1), Tooltip("0 = Friendly, 1 = Enemy")]
+        private int teamId;
 
         public ResourceType ResourceType => resourceType;
         public float GenerationRate => generationRate;

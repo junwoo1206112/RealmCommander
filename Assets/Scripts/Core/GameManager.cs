@@ -15,6 +15,7 @@ namespace RealmCommander.Core
         public event Action OnGameStarted;
         public event Action OnGamePaused;
         public event Action OnGameResumed;
+        public event Action<float> OnGameSpeedChanged;
 
         public bool IsPaused { get; private set; }
         public float GameSpeed => gameSpeed;
@@ -41,7 +42,7 @@ namespace RealmCommander.Core
             {
                 Instance = null;
                 if (Network.NetworkGameManager.Instance == null)
-                    Time.timeScale = 1f;
+                    TimeScaleManager.Reset();
             }
         }
 
@@ -49,7 +50,7 @@ namespace RealmCommander.Core
         {
             IsPaused = false;
             if (Network.NetworkGameManager.Instance == null)
-                Time.timeScale = gameSpeed;
+                TimeScaleManager.SetTimeScale(gameSpeed);
 
             Audio.AudioManager.Instance?.PlayBattleMusic();
 
@@ -63,7 +64,7 @@ namespace RealmCommander.Core
             if (Network.NetworkGameManager.Instance != null)
                 Network.NetworkGameManager.Instance.ServerSetPaused(true);
             else
-                Time.timeScale = 0f;
+                TimeScaleManager.SetPaused(true);
             OnGamePaused?.Invoke();
         }
 
@@ -74,7 +75,10 @@ namespace RealmCommander.Core
             if (Network.NetworkGameManager.Instance != null)
                 Network.NetworkGameManager.Instance.ServerSetPaused(false);
             else
-                Time.timeScale = gameSpeed;
+            {
+                TimeScaleManager.SetPaused(false);
+                TimeScaleManager.SetTimeScale(gameSpeed);
+            }
             OnGameResumed?.Invoke();
         }
 
@@ -87,8 +91,9 @@ namespace RealmCommander.Core
                 if (Network.NetworkGameManager.Instance != null)
                     Network.NetworkGameManager.Instance.ServerSetGameSpeed(gameSpeed);
                 else
-                    Time.timeScale = gameSpeed;
+                    TimeScaleManager.SetTimeScale(gameSpeed);
             }
+            OnGameSpeedChanged?.Invoke(gameSpeed);
         }
     }
 }

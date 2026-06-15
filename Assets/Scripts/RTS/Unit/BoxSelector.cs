@@ -20,9 +20,7 @@ namespace RealmCommander.RTS
 
         private Camera GetCamera()
         {
-            Camera cam = Camera.main;
-            if (cam == null) cam = FindFirstObjectByType<Camera>();
-            return cam;
+            return RealmCommander.Network.NetworkUtils.GetMainCamera();
         }
 
         private void Update()

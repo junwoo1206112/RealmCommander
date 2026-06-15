@@ -6,6 +6,7 @@ using RealmCommander.Network;
 using UnityEngine.SceneManagement;
 using System.Net;
 using System.Net.Sockets;
+using System.Threading.Tasks;
 
 namespace RealmCommander.UI
 {
@@ -37,11 +38,32 @@ namespace RealmCommander.UI
                 ipInputField.text = "127.0.0.1";
 
             if (localIPText != null)
-                localIPText.text = $"LAN IP: {GetLocalIPv4()} | TCP 7777";
+                localIPText.text = "LAN IP: Loading... | TCP 7777";
 
             ShowStatus("", false);
 
             NetworkBootstrap.EnsureNetworkManager();
+            _ = LoadLocalIPAsync();
+        }
+
+        private async Task LoadLocalIPAsync()
+        {
+            string ip = await Task.Run(() =>
+            {
+                try
+                {
+                    foreach (IPAddress addr in Dns.GetHostEntry(Dns.GetHostName()).AddressList)
+                    {
+                        if (addr.AddressFamily == AddressFamily.InterNetwork && !IPAddress.IsLoopback(addr))
+                            return addr.ToString();
+                    }
+                }
+                catch (SocketException) { }
+                return "Unavailable";
+            });
+
+            if (localIPText != null)
+                localIPText.text = $"LAN IP: {ip} | TCP 7777";
         }
 
         private void Update()
@@ -101,23 +123,6 @@ namespace RealmCommander.UI
             nm.StartClient();
             ShowStatus($"Connecting to {address}...", true);
             Debug.Log($"[LobbyUI] Connecting to {address}...");
-        }
-
-        private static string GetLocalIPv4()
-        {
-            try
-            {
-                foreach (IPAddress ip in Dns.GetHostEntry(Dns.GetHostName()).AddressList)
-                {
-                    if (ip.AddressFamily == AddressFamily.InterNetwork && !IPAddress.IsLoopback(ip))
-                        return ip.ToString();
-                }
-            }
-            catch (SocketException)
-            {
-            }
-
-            return "Unavailable";
         }
 
         public void OnBackToMenu()

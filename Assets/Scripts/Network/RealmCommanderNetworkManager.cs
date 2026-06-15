@@ -99,14 +99,21 @@ namespace RealmCommander.Network
 
         private static int GetAvailableTeamId()
         {
+            bool team0Taken = false;
+            bool team1Taken = false;
+
             foreach (NetworkConnectionToClient connection in NetworkServer.connections.Values)
             {
-                NetworkPlayer player = connection.identity != null
-                    ? connection.identity.GetComponent<NetworkPlayer>()
-                    : null;
-                if (player != null && player.TeamId == 0)
-                    return 1;
+                if (connection.identity == null) continue;
+                NetworkPlayer player = connection.identity.GetComponent<NetworkPlayer>();
+                if (player == null) continue;
+
+                if (player.TeamId == 0) team0Taken = true;
+                else if (player.TeamId == 1) team1Taken = true;
             }
+
+            if (!team0Taken) return 0;
+            if (!team1Taken) return 1;
 
             return 0;
         }

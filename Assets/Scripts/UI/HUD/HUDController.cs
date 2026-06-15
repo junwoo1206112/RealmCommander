@@ -45,8 +45,14 @@ namespace RealmCommander.UI
                 ResourceManager.Instance.OnManaChangedEvent += UpdateResourceUI;
             }
 
+            if (GameManager.Instance != null)
+            {
+                GameManager.Instance.OnGameSpeedChanged += UpdateGameSpeedUI;
+            }
+
             UpdateResourceUI(0, 0);
-            UpdateSelectionUI(new List<GameObject>());
+            UpdateSelectionUI(new GameObject[0]);
+            UpdateGameSpeedUI(GameManager.Instance?.GameSpeed ?? 1f);
         }
 
         private void AutoWireReferences()
@@ -128,11 +134,11 @@ namespace RealmCommander.UI
                 ResourceManager.Instance.OnGoldChangedEvent -= UpdateResourceUI;
                 ResourceManager.Instance.OnManaChangedEvent -= UpdateResourceUI;
             }
-        }
 
-        private void Update()
-        {
-            UpdateGameSpeedUI();
+            if (GameManager.Instance != null)
+            {
+                GameManager.Instance.OnGameSpeedChanged -= UpdateGameSpeedUI;
+            }
         }
 
         private void UpdateResourceUI(float current, float change)
@@ -150,7 +156,7 @@ namespace RealmCommander.UI
             }
         }
 
-        private void UpdateSelectionUI(List<GameObject> selected)
+        private void UpdateSelectionUI(IReadOnlyList<GameObject> selected)
         {
             StopObservingSelection();
             if (selectionPanel == null) return;
@@ -207,11 +213,11 @@ namespace RealmCommander.UI
             observedBuilding = null;
         }
 
-        private void UpdateGameSpeedUI()
+        private void UpdateGameSpeedUI(float speed)
         {
-            if (gameSpeedText != null && GameManager.Instance != null)
+            if (gameSpeedText != null)
             {
-                gameSpeedText.text = $"Speed: {GameManager.Instance.GameSpeed:F1}x";
+                gameSpeedText.text = $"Speed: {speed:F1}x";
             }
         }
 

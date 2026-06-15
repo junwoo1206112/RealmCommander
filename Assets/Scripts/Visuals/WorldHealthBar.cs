@@ -1,4 +1,5 @@
 using RealmCommander.RTS;
+using RealmCommander.Core;
 using UnityEngine;
 
 namespace RealmCommander.Visuals
@@ -50,9 +51,7 @@ namespace RealmCommander.Visuals
         {
             if (pixelSprite == null)
             {
-                var texture = new Texture2D(1, 1, TextureFormat.RGBA32, false);
-                texture.SetPixel(0, 0, Color.white);
-                texture.Apply();
+                var texture = StaticResources.CreatePixelTexture(Color.white);
                 pixelSprite = Sprite.Create(texture, new Rect(0, 0, 1, 1), new Vector2(0.5f, 0.5f), 1f);
             }
 

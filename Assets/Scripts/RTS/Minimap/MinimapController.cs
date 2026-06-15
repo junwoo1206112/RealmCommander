@@ -26,6 +26,12 @@ namespace RealmCommander.RTS
         {
             if (minimapCamera != null && minimapImage != null)
             {
+                if (minimapTexture != null)
+                {
+                    minimapCamera.targetTexture = null;
+                    minimapTexture.Release();
+                    Destroy(minimapTexture);
+                }
                 minimapTexture = new RenderTexture(256, 256, 24);
                 minimapTexture.Create();
                 minimapCamera.targetTexture = minimapTexture;

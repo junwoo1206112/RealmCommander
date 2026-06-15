@@ -15,6 +15,8 @@ namespace RealmCommander.RTS
 
         private Renderer cachedRenderer;
         private MaterialPropertyBlock colorBlock;
+        private float updateInterval = 0.5f;
+        private float nextUpdateTime;
 
         public void Configure(ResourceType type, int teamId = -1)
         {
@@ -26,11 +28,15 @@ namespace RealmCommander.RTS
         private void Awake()
         {
             cachedRenderer = GetComponent<Renderer>();
+            nextUpdateTime = Time.time + Random.Range(0f, updateInterval);
             ApplyVisual();
         }
 
         private void Update()
         {
+            if (Time.time < nextUpdateTime) return;
+            nextUpdateTime = Time.time + updateInterval;
+
             if (!Mirror.NetworkServer.active || ResourceManager.Instance == null) return;
 
             int workersPerTeam = 0;
@@ -40,7 +46,7 @@ namespace RealmCommander.RTS
 
             if (workersPerTeam <= 0) return;
 
-            float amount = workersPerTeam * amountPerWorkerPerSecond * Time.deltaTime;
+            float amount = workersPerTeam * amountPerWorkerPerSecond * updateInterval;
             if (resourceType == ResourceType.Gold)
                 ResourceManager.Instance.AddGold(producingTeam, amount);
             else
@@ -54,10 +60,13 @@ namespace RealmCommander.RTS
             EntityRegistry registry = EntityRegistry.Instance;
             if (registry == null) { dominantCount = 0; return 0; }
 
+            float sqrRadius = gatherRadius * gatherRadius;
+            Vector3 pos = transform.position;
+
             foreach (Unit unit in registry.AllUnits)
             {
                 if (unit == null || !unit.IsAlive) continue;
-                if ((unit.transform.position - transform.position).sqrMagnitude > gatherRadius * gatherRadius) continue;
+                if ((unit.transform.position - pos).sqrMagnitude > sqrRadius) continue;
                 if (unit.IsEnemy) team1++;
                 else team0++;
             }
@@ -72,11 +81,14 @@ namespace RealmCommander.RTS
             EntityRegistry registry = EntityRegistry.Instance;
             if (registry == null) return 0;
 
+            float sqrRadius = gatherRadius * gatherRadius;
+            Vector3 pos = transform.position;
+
             foreach (Unit unit in registry.AllUnits)
             {
                 if (unit == null || !unit.IsAlive) continue;
                 if ((unit.IsEnemy ? 1 : 0) != teamId) continue;
-                if ((unit.transform.position - transform.position).sqrMagnitude > gatherRadius * gatherRadius) continue;
+                if ((unit.transform.position - pos).sqrMagnitude > sqrRadius) continue;
                 workers++;
                 if (workers >= maxWorkers) return workers;
             }

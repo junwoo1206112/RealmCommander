@@ -174,8 +174,7 @@ namespace RealmCommander.Visuals
         private static void EnsureMaterial()
         {
             if (sharedMaterial != null) return;
-            Shader shader = Shader.Find("Standard") ?? Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Sprites/Default");
-            sharedMaterial = new Material(shader);
+            sharedMaterial = Core.StaticResources.GetOrCreateMaterial("Standard", Color.white);
         }
     }
 }

@@ -14,7 +14,7 @@ namespace RealmCommander.Core
         private HashSet<GameObject> selectableUnits = new HashSet<GameObject>();
 
         public IReadOnlyList<GameObject> SelectedUnits => selectedUnits;
-        public event Action<List<GameObject>> OnSelectionChanged;
+        public event Action<IReadOnlyList<GameObject>> OnSelectionChanged;
 
         private void Awake()
         {
@@ -100,8 +100,7 @@ namespace RealmCommander.Core
 
         public void AddUnitsInBoxToSelection(Rect selectionBox)
         {
-            var cam = Camera.main;
-            if (cam == null) cam = FindFirstObjectByType<Camera>();
+            var cam = RealmCommander.Network.NetworkUtils.GetMainCamera();
             if (cam == null) return;
 
             var registry = EntityRegistry.Instance;
@@ -145,8 +144,7 @@ namespace RealmCommander.Core
         {
             ClearSelection();
 
-            var cam = Camera.main;
-            if (cam == null) cam = FindFirstObjectByType<Camera>();
+            var cam = RealmCommander.Network.NetworkUtils.GetMainCamera();
             if (cam == null) return;
 
             var registry = EntityRegistry.Instance;

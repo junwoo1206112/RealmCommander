@@ -47,6 +47,7 @@ namespace RealmCommander.Network
             if (Instance == null)
             {
                 Instance = this;
+                DontDestroyOnLoad(gameObject);
             }
             else if (Instance != this)
             {
@@ -378,7 +379,7 @@ namespace RealmCommander.Network
             gameState = GameState.Playing;
             syncedGameSpeed = 1f;
             isGamePaused = false;
-            Time.timeScale = 1f;
+            Core.TimeScaleManager.Reset();
             OnGameStarted?.Invoke();
             Debug.Log("[Game] Game Started - State: Playing");
         }
@@ -444,6 +445,15 @@ namespace RealmCommander.Network
             else SceneManager.LoadScene(lobbySceneName);
         }
 
+        public void RestartGame()
+        {
+            if (!isServer) return;
+
+            gameState = GameState.WaitingForPlayers;
+            Core.TimeScaleManager.Reset();
+            StartGame();
+        }
+
         private void OnGameStateChanged(GameState oldValue, GameState newValue)
         {
             OnStateChanged?.Invoke(newValue);
@@ -452,20 +462,22 @@ namespace RealmCommander.Network
         private void OnPauseChanged(bool oldValue, bool newValue)
         {
             if (!isServer)
-                Time.timeScale = newValue ? 0f : syncedGameSpeed;
+                Core.TimeScaleManager.SetPaused(newValue);
         }
 
         private void OnSpeedChanged(float oldValue, float newValue)
         {
             if (!isServer && !isGamePaused)
-                Time.timeScale = newValue;
+                Core.TimeScaleManager.SetTimeScale(newValue);
         }
 
         [Server]
         public void ServerSetPaused(bool paused)
         {
             isGamePaused = paused;
-            Time.timeScale = paused ? 0f : syncedGameSpeed;
+            Core.TimeScaleManager.SetPaused(paused);
+            if (!paused)
+                Core.TimeScaleManager.SetTimeScale(syncedGameSpeed);
         }
 
         [Server]
@@ -473,7 +485,7 @@ namespace RealmCommander.Network
         {
             syncedGameSpeed = Mathf.Clamp(speed, 0.5f, 3f);
             if (!isGamePaused)
-                Time.timeScale = syncedGameSpeed;
+                Core.TimeScaleManager.SetTimeScale(syncedGameSpeed);
         }
 
         private void OnGUI()

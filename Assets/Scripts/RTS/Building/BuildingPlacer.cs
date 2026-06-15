@@ -78,7 +78,7 @@ namespace RealmCommander.RTS
 
         private void HandlePlacement()
         {
-            Camera camera = Camera.main != null ? Camera.main : FindFirstObjectByType<Camera>();
+            Camera camera = RealmCommander.Network.NetworkUtils.GetMainCamera();
             if (camera == null) return;
 
             Ray ray = camera.ScreenPointToRay(Input.mousePosition);

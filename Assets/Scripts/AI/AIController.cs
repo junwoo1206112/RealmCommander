@@ -173,7 +173,9 @@ namespace RealmCommander.AI
             List<GameObject> aliveUnits = new List<GameObject>();
             foreach (var unit in controlledUnits)
             {
-                if (unit != null && unit.GetComponent<Unit>() != null && unit.GetComponent<Unit>().IsAlive)
+                if (unit == null) continue;
+                Unit unitComp = unit.GetComponent<Unit>();
+                if (unitComp != null && unitComp.IsAlive)
                     aliveUnits.Add(unit);
             }
 

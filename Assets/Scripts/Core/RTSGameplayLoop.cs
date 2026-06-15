@@ -112,7 +112,7 @@ namespace RealmCommander.Core
             if (type == BuildingType.ResourceGenerator)
                 buildingObject.AddComponent<ResourceGenerator>();
 
-            Mirror.NetworkServer.Spawn(buildingObject, FindTeamConnection(teamId));
+            Mirror.NetworkServer.Spawn(buildingObject, RealmCommander.Network.NetworkUtils.FindTeamConnection(teamId));
 
             SelectionManager.Instance?.SelectUnit(buildingObject);
             Debug.Log($"[RTSLoop] Built {name} for team {teamId}. B/R build, P/O train units.");
@@ -215,20 +215,6 @@ namespace RealmCommander.Core
             }
 
             return best;
-        }
-
-        private static Mirror.NetworkConnectionToClient FindTeamConnection(int teamId)
-        {
-            foreach (Mirror.NetworkConnectionToClient connection in Mirror.NetworkServer.connections.Values)
-            {
-                NetworkPlayer player = connection.identity != null
-                    ? connection.identity.GetComponent<NetworkPlayer>()
-                    : null;
-                if (player != null && player.TeamId == teamId)
-                    return connection;
-            }
-
-            return null;
         }
 
         private static Vector3 GetFriendlyCommanderPosition(int teamId)

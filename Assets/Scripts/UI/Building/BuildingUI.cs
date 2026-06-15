@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
@@ -26,6 +27,7 @@ namespace RealmCommander.UI
         [SerializeField] private TextMeshProUGUI productionTimeText;
 
         private ProductionButtonUI[] productionButtons;
+        private bool isObservingBuilding;
 
         private void Start()
         {
@@ -39,20 +41,17 @@ namespace RealmCommander.UI
 
         private void OnDestroy()
         {
+            StopObservingBuilding();
             if (SelectionManager.Instance != null)
             {
                 SelectionManager.Instance.OnSelectionChanged -= UpdateSelection;
             }
         }
 
-        private void Update()
+        private void UpdateSelection(System.Collections.Generic.IReadOnlyList<GameObject> selected)
         {
-            UpdateBuildingInfo();
-            UpdateProductionProgress();
-        }
+            StopObservingBuilding();
 
-        private void UpdateSelection(System.Collections.Generic.List<GameObject> selected)
-        {
             if (selected == null || selected.Count == 0)
             {
                 if (buildingPanel != null) buildingPanel.SetActive(false);
@@ -68,8 +67,11 @@ namespace RealmCommander.UI
                 if (building != null)
                 {
                     selectedBuilding = building;
+                    StartObservingBuilding();
                     if (buildingPanel != null) buildingPanel.SetActive(true);
                     CreateProductionButtons();
+                    UpdateBuildingInfo();
+                    UpdateProductionProgress();
                     return;
                 }
             }
@@ -80,24 +82,52 @@ namespace RealmCommander.UI
             ClearProductionButtons();
         }
 
+        private void StartObservingBuilding()
+        {
+            if (selectedBuilding == null || isObservingBuilding) return;
+            isObservingBuilding = true;
+            selectedBuilding.OnHealthChangedEvent += OnBuildingHealthChanged;
+            selectedBuilding.OnProductionStarted += OnProductionStarted;
+            selectedBuilding.OnProductionCompleted += OnProductionCompleted;
+        }
+
+        private void StopObservingBuilding()
+        {
+            if (selectedBuilding != null && isObservingBuilding)
+            {
+                selectedBuilding.OnHealthChangedEvent -= OnBuildingHealthChanged;
+                selectedBuilding.OnProductionStarted -= OnProductionStarted;
+                selectedBuilding.OnProductionCompleted -= OnProductionCompleted;
+            }
+            isObservingBuilding = false;
+        }
+
+        private void OnBuildingHealthChanged(float current, float max)
+        {
+            if (healthBar != null)
+                healthBar.value = max > 0f ? current / max : 0f;
+            if (healthText != null)
+                healthText.text = $"HP: {Mathf.FloorToInt(current)}/{Mathf.FloorToInt(max)}";
+        }
+
+        private void OnProductionStarted(UnitProductionData data)
+        {
+            UpdateProductionProgress();
+        }
+
+        private void OnProductionCompleted(UnitProductionData data)
+        {
+            UpdateProductionProgress();
+        }
+
         private void UpdateBuildingInfo()
         {
             if (selectedBuilding == null) return;
 
             if (buildingNameText != null)
-            {
                 buildingNameText.text = selectedBuilding.BuildingName;
-            }
 
-            if (healthBar != null)
-            {
-                healthBar.value = selectedBuilding.HealthPercent;
-            }
-
-            if (healthText != null)
-            {
-                healthText.text = $"HP: {Mathf.FloorToInt(selectedBuilding.CurrentHealth)}/{Mathf.FloorToInt(selectedBuilding.MaxHealth)}";
-            }
+            OnBuildingHealthChanged(selectedBuilding.CurrentHealth, selectedBuilding.MaxHealth);
         }
 
         private void UpdateProductionProgress()
@@ -223,12 +253,10 @@ namespace RealmCommander.UI
             }
         }
 
-        private void Update()
+        private void OnDestroy()
         {
-            if (produceButton == null || productionData == null || building == null) return;
-            ResourceManager resources = ResourceManager.Instance;
-            produceButton.interactable = building.CanIssueLocalCommands && resources != null &&
-                resources.CanAfford(building.TeamId, productionData.goldCost, productionData.manaCost);
+            if (produceButton != null)
+                produceButton.onClick.RemoveListener(OnProduceClicked);
         }
     }
 }

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace RealmCommander.Core
@@ -7,10 +8,19 @@ namespace RealmCommander.Core
         private const string IconRoot = "Art/Icons/";
         private const string TerrainRoot = "Art/Terrain/";
 
+        private static readonly Dictionary<string, Sprite> iconCache = new Dictionary<string, Sprite>();
+        private static readonly Dictionary<string, Texture2D> terrainCache = new Dictionary<string, Texture2D>();
+
         public static Sprite LoadIcon(string assetId)
         {
             if (string.IsNullOrWhiteSpace(assetId)) return null;
-            return Resources.Load<Sprite>(IconRoot + Normalize(assetId));
+            string key = Normalize(assetId);
+            if (iconCache.TryGetValue(key, out Sprite cached))
+                return cached;
+            Sprite sprite = Resources.Load<Sprite>(IconRoot + key);
+            if (sprite != null)
+                iconCache[key] = sprite;
+            return sprite;
         }
 
         public static Sprite LoadUnitIcon(string unitIdOrName)
@@ -24,7 +34,18 @@ namespace RealmCommander.Core
         {
             string id = Normalize(terrainId);
             if (string.IsNullOrEmpty(id)) return null;
-            return Resources.Load<Texture2D>(TerrainRoot + (id.StartsWith("terrain_") ? id : "terrain_" + id));
+            if (terrainCache.TryGetValue(id, out Texture2D cached))
+                return cached;
+            Texture2D texture = Resources.Load<Texture2D>(TerrainRoot + (id.StartsWith("terrain_") ? id : "terrain_" + id));
+            if (texture != null)
+                terrainCache[id] = texture;
+            return texture;
+        }
+
+        public static void ClearCache()
+        {
+            iconCache.Clear();
+            terrainCache.Clear();
         }
 
         private static string Normalize(string value)

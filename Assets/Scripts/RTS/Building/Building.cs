@@ -48,6 +48,8 @@ namespace RealmCommander.RTS
         private string syncCurrentProductName = "";
         [SyncVar]
         private float syncProductionProgress;
+        [SyncVar]
+        private bool syncIsProducing;
         private bool isSelected;
         private bool isConstructing;
         private float constructionProgress;
@@ -63,7 +65,7 @@ namespace RealmCommander.RTS
         public bool IsAlive => currentHealth > 0;
         public bool IsSelected => isSelected;
         public bool IsConstructing => isServer ? isConstructing : syncIsConstructing;
-        public bool IsProducing => currentProduction.Count > 0;
+        public bool IsProducing => isServer ? currentProduction.Count > 0 : syncIsProducing;
         public float ProductionRange => productionRange;
         public int TeamId => teamId;
         public bool CanIssueLocalCommands => !NetworkClient.active ||
@@ -273,6 +275,7 @@ namespace RealmCommander.RTS
                 {
                     syncCurrentProductName = "";
                     syncProductionProgress = 0f;
+                    syncIsProducing = false;
                 }
 
                 if (isServer)
@@ -376,6 +379,7 @@ namespace RealmCommander.RTS
             {
                 syncCurrentProductName = data.unitName;
                 syncProductionProgress = 0f;
+                syncIsProducing = true;
             }
 
             OnProductionStarted?.Invoke(data);
@@ -412,7 +416,7 @@ namespace RealmCommander.RTS
             if (!string.IsNullOrEmpty(data.specId) && unitComponent != null)
                 unitComponent.ApplySpec(data.specId);
 
-            NetworkConnectionToClient owner = FindTeamConnection(teamId);
+            NetworkConnectionToClient owner = Network.NetworkUtils.FindTeamConnection(teamId);
             if (owner != null) NetworkServer.Spawn(unit, owner);
             else NetworkServer.Spawn(unit);
 
@@ -547,41 +551,13 @@ namespace RealmCommander.RTS
             ApplyWorldArt();
         }
 
-        [Server]
-        private static NetworkConnectionToClient FindTeamConnection(int requestedTeamId)
-        {
-            foreach (NetworkConnectionToClient connection in NetworkServer.connections.Values)
-            {
-                NetworkPlayer player = connection.identity != null
-                    ? connection.identity.GetComponent<NetworkPlayer>()
-                    : null;
-                if (player != null && player.TeamId == requestedTeamId)
-                    return connection;
-            }
-            return null;
-        }
-
         private void OnMouseDown()
         {
-            if (!CanIssueLocalCommands || SelectionManager.Instance == null) return;
-            if (RTS.BoxSelector.WasClickHandled) return;
-
-            bool additive = Input.GetKey(KeyCode.LeftShift) || MobileRTSInput.AdditiveSelectionActive;
-
-            if (additive)
-            {
-                if (isSelected)
-                    SelectionManager.Instance.RemoveFromSelection(gameObject);
-                else
-                    SelectionManager.Instance.AddToSelection(gameObject);
-            }
-            else
-            {
-                SelectionManager.Instance.SelectUnit(gameObject);
-            }
+            if (!CanIssueLocalCommands) return;
+            SelectionHelper.HandleSelection(gameObject, isSelected);
         }
 
-        public List<UnitProductionData> GetProductionQueue()
+        public IReadOnlyList<UnitProductionData> GetProductionQueue()
         {
             return productionQueue;
         }

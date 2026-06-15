@@ -15,11 +15,20 @@ namespace RealmCommander.UI
         [SerializeField] private Button returnToLobbyButton;
         [SerializeField] private Button playAgainButton;
 
-        private static GameResultUI instance;
+        public static GameResultUI Instance { get; private set; }
 
         private void Awake()
         {
-            instance = this;
+            if (Instance == null)
+            {
+                Instance = this;
+            }
+            else
+            {
+                Destroy(gameObject);
+                return;
+            }
+
             if (resultPanel != null)
                 resultPanel.SetActive(false);
         }
@@ -33,22 +42,28 @@ namespace RealmCommander.UI
                 playAgainButton.onClick.AddListener(OnPlayAgain);
         }
 
+        private void OnDestroy()
+        {
+            if (Instance == this)
+                Instance = null;
+        }
+
         public static void Show(bool isVictory)
         {
-            if (instance == null) return;
+            if (Instance == null) return;
 
-            if (instance.resultPanel != null)
-                instance.resultPanel.SetActive(true);
+            if (Instance.resultPanel != null)
+                Instance.resultPanel.SetActive(true);
 
-            if (instance.resultText != null)
+            if (Instance.resultText != null)
             {
-                instance.resultText.text = isVictory ? "VICTORY" : "DEFEAT";
-                instance.resultText.color = isVictory ? Color.yellow : Color.red;
+                Instance.resultText.text = isVictory ? "VICTORY" : "DEFEAT";
+                Instance.resultText.color = isVictory ? Color.yellow : Color.red;
             }
 
-            if (instance.detailText != null)
+            if (Instance.detailText != null)
             {
-                instance.detailText.text = isVictory
+                Instance.detailText.text = isVictory
                     ? "All enemy units have been defeated!"
                     : "Your units have been defeated.";
             }
@@ -68,7 +83,7 @@ namespace RealmCommander.UI
             var gameManager = NetworkGameManager.Instance;
             if (gameManager != null)
             {
-                gameManager.ReturnToLobby();
+                gameManager.RestartGame();
             }
         }
     }

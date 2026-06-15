@@ -1,4 +1,5 @@
 using UnityEngine;
+using RealmCommander.Core;
 
 namespace RealmCommander.RTS
 {
@@ -176,8 +177,7 @@ namespace RealmCommander.RTS
 
         private static Material CreateMaterial(Color color)
         {
-            Shader shader = Shader.Find("Standard") ?? Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Sprites/Default");
-            return new Material(shader) { color = color };
+            return StaticResources.GetOrCreateMaterial("Standard", color);
         }
     }
 }

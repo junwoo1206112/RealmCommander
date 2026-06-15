@@ -1,4 +1,5 @@
 using UnityEngine;
+using RealmCommander.Core;
 
 namespace RealmCommander.RTS
 {
@@ -28,11 +29,7 @@ namespace RealmCommander.RTS
         private static Material GetSharedMaterial()
         {
             if (cachedMaterial == null)
-            {
-                Shader shader = Shader.Find("Sprites/Default");
-                if (shader == null) shader = Shader.Find("Universal Render Pipeline/Unlit");
-                cachedMaterial = new Material(shader);
-            }
+                cachedMaterial = StaticResources.GetOrCreateMaterial("Sprites/Default", Color.white);
             return cachedMaterial;
         }
 

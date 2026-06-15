@@ -66,7 +66,7 @@ namespace RealmCommander.RTS
             HandleDesktopInput();
             HandleMobileInput();
 
-            yaw = Mathf.Lerp(yaw, targetYaw, Time.deltaTime * rotateSmoothing);
+            yaw = Mathf.Lerp(yaw, targetYaw, 1f - Mathf.Exp(-rotateSmoothing * Time.deltaTime));
 
             if (enableSmoothing)
                 transform.position = Vector3.SmoothDamp(transform.position, targetPosition, ref panVelocity, smoothTime);
