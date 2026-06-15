@@ -7,6 +7,8 @@ namespace RealmCommander.Network
     {
         public static CombatManager Instance { get; private set; }
 
+        private const float RangeToleranceMultiplier = 1.2f;
+
         private void Awake()
         {
             if (Instance == null)
@@ -44,7 +46,7 @@ namespace RealmCommander.Network
             if (targetBuilding != null && !targetBuilding.IsAlive) return false;
 
             float distance = Vector3.Distance(attacker.transform.position, target.transform.position);
-            if (distance > attackerUnit.AttackRange * 1.2f) return false;
+            if (distance > attackerUnit.AttackRange * RangeToleranceMultiplier) return false;
 
             int attackerTeam = attackerUnit.IsEnemy ? 1 : 0;
             bool targetIsEnemy = targetUnit != null ? targetUnit.IsEnemy

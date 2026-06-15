@@ -65,7 +65,7 @@ namespace RealmCommander.RTS
 
             foreach (Unit unit in registry.AllUnits)
             {
-                if (unit == null || !unit.IsAlive) continue;
+                if (unit == null || !unit.IsAlive || !unit.CanGatherResources) continue;
                 if ((unit.transform.position - pos).sqrMagnitude > sqrRadius) continue;
                 if (unit.IsEnemy) team1++;
                 else team0++;
@@ -86,7 +86,7 @@ namespace RealmCommander.RTS
 
             foreach (Unit unit in registry.AllUnits)
             {
-                if (unit == null || !unit.IsAlive) continue;
+                if (unit == null || !unit.IsAlive || !unit.CanGatherResources) continue;
                 if ((unit.IsEnemy ? 1 : 0) != teamId) continue;
                 if ((unit.transform.position - pos).sqrMagnitude > sqrRadius) continue;
                 workers++;

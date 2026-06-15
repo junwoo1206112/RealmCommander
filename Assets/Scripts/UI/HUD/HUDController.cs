@@ -181,7 +181,7 @@ namespace RealmCommander.UI
                 {
                     observedUnit = unit;
                     observedUnit.OnHealthChangedEvent += UpdateObservedHealth;
-                    UpdateObservedHealth(unit.CurrentHealth, unit.MaxHealth);
+                    UpdateUnitDisplay(unit);
                     return;
                 }
 
@@ -199,8 +199,21 @@ namespace RealmCommander.UI
         {
             if (healthBar != null)
                 healthBar.value = max > 0f ? current / max : 0f;
-            if (unitInfoText != null)
+            if (unitInfoText != null && observedUnit != null)
+                UpdateUnitDisplay(observedUnit);
+            else if (unitInfoText != null)
                 unitInfoText.text = $"HP: {Mathf.FloorToInt(current)}/{Mathf.FloorToInt(max)}";
+        }
+
+        private void UpdateUnitDisplay(RTS.Unit unit)
+        {
+            if (unitInfoText == null) return;
+            if (healthBar != null)
+                healthBar.value = unit.MaxHealth > 0f ? unit.CurrentHealth / unit.MaxHealth : 0f;
+            unitInfoText.text = $"{unit.SpecDisplayName}\n" +
+                $"HP: {Mathf.FloorToInt(unit.CurrentHealth)}/{Mathf.FloorToInt(unit.MaxHealth)}\n" +
+                $"ATK: {unit.AttackDamage}  SPD: {unit.AttackSpeed:F1}\n" +
+                $"Range: {unit.AttackRange}  Move: {unit.MoveSpeed}";
         }
 
         private void StopObservingSelection()

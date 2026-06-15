@@ -15,38 +15,213 @@ namespace RealmCommander.Core
         private const float BuildGridSize = 1f;
         private const float BuildClearance = 2.8f;
 
+        private bool isPlacing;
+        private BuildingType pendingBuildType;
+        private string pendingBuildName;
+        private float pendingGoldCost;
+        private float pendingManaCost;
+        private GameObject placementGhost;
+        private MaterialPropertyBlock ghostColorBlock;
+        private static readonly Color GhostValidColor = new Color(0f, 1f, 0f, 0.35f);
+        private static readonly Color GhostInvalidColor = new Color(1f, 0f, 0f, 0.35f);
+
         private void Start()
         {
             EnsureResourceNodes();
         }
 
-        private void Update()
+        private void OnDestroy()
         {
-            if (!Mirror.NetworkServer.active) return;
-            if (Time.time < nextHotkeyTime) return;
+            if (placementGhost != null)
+                Destroy(placementGhost);
+        }
+
+        private void StartPlacementMode(BuildingType type, string name, float goldCost, float manaCost)
+        {
+            int localTeam = GetLocalTeamId();
+            ResourceManager resources = ResourceManager.Instance;
+            if (resources == null || !resources.CanAfford(localTeam, goldCost, manaCost))
+            {
+                Debug.Log($"[RTSLoop] Not enough resources for {name}.");
+                return;
+            }
+
+            isPlacing = true;
+            pendingBuildType = type;
+            pendingBuildName = name;
+            pendingGoldCost = goldCost;
+            pendingManaCost = manaCost;
+
+            if (placementGhost == null)
+            {
+                placementGhost = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                placementGhost.name = "PlacementGhost";
+                Collider col = placementGhost.GetComponent<Collider>();
+                if (col != null) Destroy(col);
+                ghostColorBlock = new MaterialPropertyBlock();
+            }
+
+            placementGhost.transform.localScale = type == BuildingType.ResourceGenerator
+                ? new Vector3(1.6f, 0.9f, 1.6f)
+                : new Vector3(2.1f, 1f, 2.1f);
+
+            ApplyGhostColor(false);
+            placementGhost.SetActive(true);
+        }
+
+        private void HandlePlacementMode()
+        {
+            Camera cam = NetworkUtils.GetMainCamera();
+            if (cam == null) return;
+
+            Ray ray = cam.ScreenPointToRay(Input.mousePosition);
+            if (Physics.Raycast(ray, out RaycastHit hit, 1000f))
+            {
+                Vector3 pos = SnapToGrid(hit.point, BuildGridSize);
+                pos.y = 0f;
+                placementGhost.transform.position = pos;
+
+                bool valid = IsBuildAreaClear(pos, BuildClearance)
+                    && NavMesh.SamplePosition(pos, out NavMeshHit _, 1f, NavMesh.AllAreas);
+                ApplyGhostColor(valid);
+
+                if (Input.GetMouseButtonDown(0) && valid)
+                {
+                    PlaceBuildingAtPosition(pos);
+                    return;
+                }
+            }
+
+            if (Input.GetMouseButtonDown(1))
+                CancelPlacementMode();
+        }
+
+        private void ApplyGhostColor(bool valid)
+        {
+            if (placementGhost == null || ghostColorBlock == null) return;
+            Renderer renderer = placementGhost.GetComponent<Renderer>();
+            if (renderer == null) return;
+            ghostColorBlock.SetColor("_Color", valid ? GhostValidColor : GhostInvalidColor);
+            renderer.SetPropertyBlock(ghostColorBlock);
+        }
+
+        private void CancelPlacementMode()
+        {
+            isPlacing = false;
+            if (placementGhost != null)
+                placementGhost.SetActive(false);
+        }
+
+        private void PlaceBuildingAtPosition(Vector3 position)
+        {
+            isPlacing = false;
+            if (placementGhost != null)
+                placementGhost.SetActive(false);
 
             int localTeam = GetLocalTeamId();
+            ResourceManager resources = ResourceManager.Instance;
+            if (resources == null || !resources.TrySpend(localTeam, pendingGoldCost, pendingManaCost)) return;
+
+            GameObject buildingObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            buildingObject.name = pendingBuildName;
+            buildingObject.transform.position = position;
+            buildingObject.transform.localScale = pendingBuildType == BuildingType.ResourceGenerator
+                ? new Vector3(1.6f, 0.9f, 1.6f)
+                : new Vector3(2.1f, 1f, 2.1f);
+            if (buildingObject.GetComponent<Mirror.NetworkIdentity>() == null)
+                buildingObject.AddComponent<Mirror.NetworkIdentity>();
+
+            Building building = buildingObject.AddComponent<Building>();
+            building.ConfigureRuntimeBuilding(pendingBuildName, pendingBuildType, localTeam);
+            building.StartConstruction();
+
+            if (pendingBuildType == BuildingType.ResourceGenerator)
+                buildingObject.AddComponent<ResourceGenerator>();
+
+            Mirror.NetworkServer.Spawn(buildingObject, NetworkUtils.FindTeamConnection(localTeam));
+            SelectionManager.Instance?.SelectUnit(buildingObject);
+            Debug.Log($"[RTSLoop] Built {pendingBuildName} at {position}.");
+        }
+
+        private void Update()
+        {
+            if (isPlacing)
+            {
+                HandlePlacementMode();
+                return;
+            }
+
+            if (Time.time < nextHotkeyTime) return;
+
+            bool isServer = Mirror.NetworkServer.active;
+            bool isClientOnly = Mirror.NetworkClient.active && !isServer;
 
             if (Input.GetKeyDown(KeyCode.B))
             {
                 nextHotkeyTime = Time.time + 0.2f;
-                TryBuildNearCommander(BuildingType.Barracks, "Barracks", barracksGoldCost, 0f, 3.2f, localTeam);
+                if (isClientOnly)
+                    NetworkGameManager.Instance?.CmdRequestBuild((int)BuildingType.Barracks);
+                else if (isServer)
+                    StartPlacementMode(BuildingType.Barracks, "Barracks", barracksGoldCost, 0f);
             }
             else if (Input.GetKeyDown(KeyCode.R))
             {
                 nextHotkeyTime = Time.time + 0.2f;
-                TryBuildNearCommander(BuildingType.ResourceGenerator, "Resource Generator", generatorGoldCost, generatorManaCost, -3.2f, localTeam);
+                if (isClientOnly)
+                    NetworkGameManager.Instance?.CmdRequestBuild((int)BuildingType.ResourceGenerator);
+                else if (isServer)
+                    StartPlacementMode(BuildingType.ResourceGenerator, "Resource Generator", generatorGoldCost, generatorManaCost);
             }
             else if (Input.GetKeyDown(KeyCode.P))
             {
                 nextHotkeyTime = Time.time + 0.2f;
-                QueueProductionOnNearestBuilding(0, localTeam);
+                if (isClientOnly)
+                    RequestClientProduction(0);
+                else if (isServer)
+                    QueueProductionOnNearestBuilding(0, GetLocalTeamId());
             }
             else if (Input.GetKeyDown(KeyCode.O))
             {
                 nextHotkeyTime = Time.time + 0.2f;
-                QueueProductionOnNearestBuilding(1, localTeam);
+                if (isClientOnly)
+                    RequestClientProduction(1);
+                else if (isServer)
+                    QueueProductionOnNearestBuilding(1, GetLocalTeamId());
             }
+        }
+
+        private static void RequestClientProduction(int productionIndex)
+        {
+            if (NetworkGameManager.Instance == null) return;
+            int localTeam = NetworkPlayer.Local != null ? NetworkPlayer.Local.TeamId : 0;
+            Building building = FindNearestFriendlyProducer(localTeam);
+            if (building == null) return;
+            NetworkGameManager.Instance.CmdRequestProduction(building.netId, productionIndex);
+        }
+
+        public static void ExecuteBuildCommand(BuildingType type, int teamId)
+        {
+            RTSGameplayLoop instance = FindAnyObjectByType<RTSGameplayLoop>();
+            if (instance == null) return;
+
+            float goldCost = 0f, manaCost = 0f, sideOffset = 0f;
+            string name = "";
+
+            if (type == BuildingType.Barracks)
+            {
+                name = "Barracks";
+                goldCost = instance.barracksGoldCost;
+                sideOffset = 3.2f;
+            }
+            else if (type == BuildingType.ResourceGenerator)
+            {
+                name = "Resource Generator";
+                goldCost = instance.generatorGoldCost;
+                manaCost = instance.generatorManaCost;
+                sideOffset = -3.2f;
+            }
+
+            TryBuildNearCommander(type, name, goldCost, manaCost, sideOffset, teamId);
         }
 
         private static int GetLocalTeamId()

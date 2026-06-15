@@ -41,6 +41,8 @@ namespace RealmCommander.Network
         private bool resourceIsolationValidated;
         private bool hostReadyLogged;
         private bool clientPassSent;
+        private bool productionTestDone;
+        private float productionTestStarted;
         private readonly Dictionary<uint, Vector3> hostEnemyStarts = new Dictionary<uint, Vector3>();
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
@@ -126,15 +128,22 @@ namespace RealmCommander.Network
             if (!hasTeamZero || !hasTeamOne) return;
             if (!ValidateResourceIsolation()) return;
 
+            if (!productionTestDone)
+            {
+                HostValidateProduction();
+                return;
+            }
+
             bool teamZeroOwned = false;
             bool teamOneOwned = false;
             Unit trackedFriendly = null;
             Unit trackedEnemy = null;
             foreach (Unit unit in FindObjectsByType<Unit>(FindObjectsSortMode.None))
             {
-                if (unit.netIdentity.connectionToClient == null) continue;
-                NetworkPlayer owner = unit.netIdentity.connectionToClient.identity != null
-                    ? unit.netIdentity.connectionToClient.identity.GetComponent<NetworkPlayer>()
+                NetworkIdentity unitIdentity = unit.netIdentity;
+                if (unitIdentity == null || unitIdentity.connectionToClient == null) continue;
+                NetworkPlayer owner = unitIdentity.connectionToClient.identity != null
+                    ? unitIdentity.connectionToClient.identity.GetComponent<NetworkPlayer>()
                     : null;
                 if (owner == null) continue;
 
@@ -154,7 +163,9 @@ namespace RealmCommander.Network
 
             foreach (Building building in FindObjectsByType<Building>(FindObjectsSortMode.None))
             {
-                NetworkConnectionToClient ownerConnection = building.netIdentity.connectionToClient;
+                NetworkIdentity buildingIdentity = building.netIdentity;
+                if (buildingIdentity == null) continue;
+                NetworkConnectionToClient ownerConnection = buildingIdentity.connectionToClient;
                 if (ownerConnection == null) continue;
                 NetworkPlayer owner = ownerConnection.identity != null
                     ? ownerConnection.identity.GetComponent<NetworkPlayer>()
@@ -226,6 +237,34 @@ namespace RealmCommander.Network
             resourceIsolationValidated = true;
             Debug.Log("[MultiplayerSmoke] RESOURCE_ISOLATION_PASS teams=0,1");
             return true;
+        }
+
+        private void HostValidateProduction()
+        {
+            if (productionTestStarted == 0f)
+            {
+                productionTestStarted = Time.realtimeSinceStartup;
+                Core.RTSGameplayLoop.ExecuteBuildCommand(RTS.BuildingType.Barracks, 0);
+                Debug.Log("[MultiplayerSmoke] PRODUCTION_TEST build Barracks");
+                return;
+            }
+
+            // Check if ANY building exists for team 0 with a production queue
+            bool hasBarracks = false;
+            bool hasQueue = false;
+            foreach (Building b in FindObjectsByType<Building>(FindObjectsSortMode.None))
+            {
+                if (b == null || !b.IsAlive || b.TeamId != 0) continue;
+                if (b.BuildingType == RTS.BuildingType.Barracks) hasBarracks = true;
+                var q = b.GetProductionQueue();
+                if (q != null && q.Count > 0) hasQueue = true;
+            }
+
+            if (hasBarracks && hasQueue)
+            {
+                productionTestDone = true;
+                Debug.Log("[MultiplayerSmoke] PRODUCTION_PASS barracks_built_and_queue_ready");
+            }
         }
 
         private void ValidateHostOwnedMovement(Unit trackedFriendly)

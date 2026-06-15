@@ -8,7 +8,6 @@ namespace RealmCommander.Audio
         public static AudioManager Instance { get; private set; }
 
         [Header("Audio Sources")]
-        [SerializeField] private AudioSource sfxSource;
         [SerializeField] private AudioSource musicSource;
 
         [Header("Sound Effects")]
@@ -47,12 +46,6 @@ namespace RealmCommander.Audio
                 return;
             }
 
-            if (sfxSource == null)
-            {
-                sfxSource = gameObject.AddComponent<AudioSource>();
-                sfxSource.playOnAwake = false;
-            }
-
             if (musicSource == null)
             {
                 musicSource = gameObject.AddComponent<AudioSource>();
@@ -60,7 +53,6 @@ namespace RealmCommander.Audio
                 musicSource.loop = true;
             }
 
-            sfxSource.volume = sfxVolume;
             musicSource.volume = musicVolume;
 
             InitializeSfxPool();
@@ -171,8 +163,6 @@ namespace RealmCommander.Audio
         public void SetSFXVolume(float volume)
         {
             sfxVolume = Mathf.Clamp01(volume);
-            if (sfxSource != null)
-                sfxSource.volume = sfxVolume;
             foreach (var source in sfxPool)
             {
                 if (source != null && !source.isPlaying)

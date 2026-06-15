@@ -14,9 +14,9 @@ namespace RealmCommander.RTS
         [SerializeField] private float startingMana = 100f;
 
         [Header("Fallback Passive Income")]
-        [SerializeField] private bool passiveIncomeEnabled;
-        [SerializeField] private float goldPerSecond;
-        [SerializeField] private float manaPerSecond;
+        [SerializeField] private bool passiveIncomeEnabled = true;
+        [SerializeField] private float goldPerSecond = 2f;
+        [SerializeField] private float manaPerSecond = 0.5f;
         [SerializeField] private float maxMana = 200f;
 
         [SyncVar(hook = nameof(OnTeam0GoldChanged))] private float team0Gold;

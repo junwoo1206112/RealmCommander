@@ -105,7 +105,52 @@ namespace RealmCommander.RTS
             if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(viewport, screenPosition, null, out Vector2 localPoint)) return;
 
             Vector3 worldPos = MinimapToWorld(localPoint);
+
+            GameObject nearestEnemy = FindNearestEnemyAt(worldPos, 3f);
+            if (nearestEnemy != null)
+            {
+                CommandManager.Instance?.IssueAttackCommand(nearestEnemy);
+                return;
+            }
+
             CommandManager.Instance?.IssueMoveCommand(worldPos);
+        }
+
+        private static GameObject FindNearestEnemyAt(Vector3 position, float radius)
+        {
+            var registry = Core.EntityRegistry.Instance;
+            if (registry == null) return null;
+
+            GameObject nearest = null;
+            float nearestDist = float.MaxValue;
+
+            foreach (var unit in registry.AllUnits)
+            {
+                if (unit == null || !unit.IsAlive) continue;
+                if (!unit.IsEnemy) continue;
+                float dist = Vector3.Distance(position, unit.transform.position);
+                if (dist < radius && dist < nearestDist)
+                {
+                    nearestDist = dist;
+                    nearest = unit.gameObject;
+                }
+            }
+
+            if (nearest != null) return nearest;
+
+            foreach (var building in registry.AllBuildings)
+            {
+                if (building == null || !building.IsAlive) continue;
+                if (building.TeamId != 1) continue;
+                float dist = Vector3.Distance(position, building.transform.position);
+                if (dist < radius && dist < nearestDist)
+                {
+                    nearestDist = dist;
+                    nearest = building.gameObject;
+                }
+            }
+
+            return nearest;
         }
 
         private Vector2 WorldToMinimap(Vector3 worldPos)

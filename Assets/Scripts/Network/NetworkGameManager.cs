@@ -170,6 +170,28 @@ namespace RealmCommander.Network
             new GameObject("RTSGameplayLoop").AddComponent<Core.RTSGameplayLoop>();
         }
 
+        [Command(requiresAuthority = false)]
+        public void CmdRequestBuild(int buildingTypeRaw, NetworkConnectionToClient sender = null)
+        {
+            if (sender?.identity == null) return;
+            var player = sender.identity.GetComponent<NetworkPlayer>();
+            if (player == null) return;
+
+            Core.RTSGameplayLoop.ExecuteBuildCommand((RTS.BuildingType)buildingTypeRaw, player.TeamId);
+        }
+
+        [Command(requiresAuthority = false)]
+        public void CmdRequestProduction(uint buildingNetId, int productionIndex, NetworkConnectionToClient sender = null)
+        {
+            if (sender?.identity == null) return;
+            if (!Mirror.NetworkServer.spawned.TryGetValue(buildingNetId, out NetworkIdentity identity)) return;
+            var building = identity.GetComponent<RTS.Building>();
+            if (building == null) return;
+            var queue = building.GetProductionQueue();
+            if (productionIndex < 0 || productionIndex >= queue.Count) return;
+            building.QueueProduction(queue[productionIndex]);
+        }
+
         public override void OnStartServer()
         {
             base.OnStartServer();

@@ -220,7 +220,10 @@ namespace RealmCommander.UI
 
             if (costText != null)
             {
-                costText.text = $"Gold: {Mathf.FloorToInt(data.goldCost)}";
+                string costStr = $"Gold: {Mathf.FloorToInt(data.goldCost)}";
+                if (data.manaCost > 0f)
+                    costStr += $"  Mana: {Mathf.FloorToInt(data.manaCost)}";
+                costText.text = costStr;
             }
 
             if (timeText != null)

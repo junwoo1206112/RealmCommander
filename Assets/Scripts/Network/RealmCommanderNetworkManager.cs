@@ -123,16 +123,16 @@ namespace RealmCommander.Network
             bool isEnemyTeam = teamId == 1;
             foreach (RTS.Unit unit in FindObjectsByType<RTS.Unit>(FindObjectsSortMode.None))
             {
-                if (unit == null || unit.IsEnemy != isEnemyTeam || unit.netIdentity.connectionToClient != null)
-                    continue;
+                if (unit == null || unit.IsEnemy != isEnemyTeam) continue;
+                if (unit.netIdentity == null || unit.netIdentity.connectionToClient != null) continue;
 
                 unit.netIdentity.AssignClientAuthority(connection);
             }
 
             foreach (RTS.Building building in FindObjectsByType<RTS.Building>(FindObjectsSortMode.None))
             {
-                if (building == null || building.TeamId != teamId || building.netIdentity.connectionToClient != null)
-                    continue;
+                if (building == null || building.TeamId != teamId) continue;
+                if (building.netIdentity == null || building.netIdentity.connectionToClient != null) continue;
 
                 building.netIdentity.AssignClientAuthority(connection);
             }

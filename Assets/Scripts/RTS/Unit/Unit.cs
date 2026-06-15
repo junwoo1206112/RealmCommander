@@ -35,6 +35,7 @@ namespace RealmCommander.RTS
         private float currentHealth;
         [SyncVar]
         private float syncMaxHealth;
+        private bool canGatherResources = true;
         [SyncVar(hook = nameof(OnArtIdChanged))]
         private string artId = "unit_soldier";
         [SyncVar(hook = nameof(OnSyncTargetChanged))]
@@ -62,10 +63,31 @@ namespace RealmCommander.RTS
             }
         }
         public float AttackRange => attackRange;
+        public float AttackDamage => attackDamage;
+        public float AttackSpeed => attackSpeed;
+        public float MoveSpeed => moveSpeed;
+        public string SpecDisplayName
+        {
+            get
+            {
+                var spec = OpenSpec.SpecManager.Instance?.GetSpec("units", artId);
+                return spec != null ? spec.name : artId.Replace("unit_", "");
+            }
+        }
         public bool IsEnemy => isEnemy;
         public bool IsAlive => currentHealth > 0;
         public bool IsSelected => isSelected;
-        public bool CanIssueLocalCommands => !NetworkClient.active || isOwned || (NetworkServer.active && !isEnemy);
+        public bool CanIssueLocalCommands
+        {
+            get
+            {
+                if (!NetworkClient.active)
+                    return !isEnemy;
+                return isOwned || (NetworkServer.active && !isEnemy);
+            }
+        }
+
+        public bool CanGatherResources => canGatherResources;
 
         public event Action<float, float> OnHealthChangedEvent;
         public event Action OnDeath;
@@ -360,6 +382,8 @@ namespace RealmCommander.RTS
             currentHealth = maxHealth;
             syncMaxHealth = maxHealth;
             ConfigureAgent();
+
+            canGatherResources = specId.Contains("worker");
 
             Debug.Log($"[Unit] Applied spec '{specId}': HP={maxHealth}, ATK={attackDamage}, SPD={moveSpeed}");
             artId = specId;

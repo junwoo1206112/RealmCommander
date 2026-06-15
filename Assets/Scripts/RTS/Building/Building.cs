@@ -64,12 +64,26 @@ namespace RealmCommander.RTS
         public float HealthPercent => maxHealth > 0f ? currentHealth / maxHealth : 0f;
         public bool IsAlive => currentHealth > 0;
         public bool IsSelected => isSelected;
-        public bool IsConstructing => isServer ? isConstructing : syncIsConstructing;
+        public bool IsConstructing
+        {
+            get
+            {
+                if (netIdentity == null) return isConstructing;
+                return isServer ? isConstructing : syncIsConstructing;
+            }
+        }
         public bool IsProducing => isServer ? currentProduction.Count > 0 : syncIsProducing;
         public float ProductionRange => productionRange;
         public int TeamId => teamId;
-        public bool CanIssueLocalCommands => !NetworkClient.active ||
-            (NetworkPlayer.Local != null && NetworkPlayer.Local.TeamId == teamId);
+        public bool CanIssueLocalCommands
+        {
+            get
+            {
+                if (!NetworkClient.active)
+                    return teamId == 0;
+                return NetworkPlayer.Local != null && NetworkPlayer.Local.TeamId == teamId;
+            }
+        }
 
         public float GetProductionProgress()
         {
