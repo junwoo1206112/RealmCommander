@@ -926,6 +926,9 @@ MonoBehaviour:
   ipInputField: {fileID: 2021139006}
   statusText: {fileID: 1663851645}
   statusPanel: {fileID: 1834001720}
+  hostOptionsPanel: {fileID: 0}
+  singlePlayerButton: {fileID: 0}
+  multiplayerButton: {fileID: 0}
   localIPText: {fileID: 231094611}
 --- !u!114 &839775848
 MonoBehaviour:
